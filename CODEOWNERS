@@ -1,0 +1,3 @@
+# CODEOWNERS
+# The first matching pattern takes precedence.
+* @cisco-ai-defense/pickle-whip-maintainers
