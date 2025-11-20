@@ -18,7 +18,7 @@
 name = "pickle-fuzzer"
 version = "0.1.0"
 edition = "2021"
-authors = ["Cisco"]
+authors = ["Cisco AI Defense"]
 description = "A structure-aware test case generator for Python pickle parsers and validators"
 repository = "https://github.com/cisco-ai-defense/pickle-fuzzer"
 homepage = "https://github.com/cisco-ai-defense/pickle-fuzzer"
