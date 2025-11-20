@@ -159,42 +159,36 @@ cargo install cargo-fuzz
 # List available fuzz targets
 cargo fuzz list
 
-# Run basic generation fuzzing
-cargo fuzz run generate_pickle
+# Run fast protocol fuzzing
+cargo fuzz run all_protocols
 
 # Run with Python validation (slower but thorough)
-cargo fuzz run validate_with_pickletools
+cargo fuzz run validate_with_python
 ```
 
 ### Available Fuzz Targets
 
-- **`generate_pickle`**: Fast fuzzing of core generation logic (~5000-10000 execs/sec)
-- **`validate_with_pickletools`**: Validates generated pickles with Python's `pickletools.dis()` (~100-500 execs/sec)
-- **`all_protocols`**: Tests all pickle protocols (0-5)
-- **`mutate_pickle`**: Stress tests the mutation system
-- **`opcode_ranges`**: Tests opcode count constraints
+- **`all_protocols`**: Fast fuzzing of all protocols (0-5) with structural validation (~5000-10000 execs/sec)
+- **`validate_with_python`**: Comprehensive validation with Python's `pickletools.genops()` (same logic as `scripts/validate-pickles.py`) including mutation testing (~100-500 execs/sec)
 
 ### Recommended Workflow
 
 ```bash
-# Phase 1: Fast discovery (1 hour)
-cargo fuzz run generate_pickle -- -max_total_time=1800
+# Phase 1: Fast discovery (1-2 hours)
+cargo fuzz run all_protocols -- -max_total_time=7200
 
-# Phase 2: Thorough validation (30 minutes)
-cargo fuzz run validate_with_pickletools -- -max_total_time=1800
-
-# Phase 3: Stress testing (1 hour)
-cargo fuzz run mutate_pickle -- -max_total_time=1800
+# Phase 2: Thorough validation (30-60 minutes)
+cargo fuzz run validate_with_python -- -max_total_time=3600
 ```
 
 ### Handling Crashes
 
 ```bash
 # Reproduce a crash
-cargo fuzz run generate_pickle fuzz/artifacts/generate_pickle/crash-abc123
+cargo fuzz run all_protocols fuzz/artifacts/all_protocols/crash-abc123
 
 # Minimize crashing input
-cargo fuzz tmin generate_pickle fuzz/artifacts/generate_pickle/crash-abc123
+cargo fuzz tmin all_protocols fuzz/artifacts/all_protocols/crash-abc123
 ```
 
 For detailed fuzzing documentation, see [fuzz/README.md](fuzz/README.md).

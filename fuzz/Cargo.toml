@@ -33,18 +33,6 @@ path = ".."
 members = ["."]
 
 [[bin]]
-name = "generate_pickle"
-path = "fuzz_targets/generate_pickle.rs"
-test = false
-doc = false
-
-[[bin]]
-name = "mutate_pickle"
-path = "fuzz_targets/mutate_pickle.rs"
-test = false
-doc = false
-
-[[bin]]
 name = "all_protocols"
 path = "fuzz_targets/all_protocols.rs"
 test = false

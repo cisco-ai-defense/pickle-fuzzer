@@ -11,90 +11,68 @@ cargo install cargo-fuzz
 # List all fuzz targets
 cargo fuzz list
 
-# Run basic generation fuzzing
-cargo fuzz run generate_pickle
+# Run fast protocol fuzzing
+cargo fuzz run all_protocols
 
 # Run with Python validation (slower but more thorough)
-cargo fuzz run validate_with_pickletools
+cargo fuzz run validate_with_python
 ```
 
 ## Fuzz Targets
 
-### 1. `generate_pickle` - Basic Generation
-**Purpose**: Fast fuzzing of core generation logic  
-**Validation**: Basic structural checks (non-empty, ends with STOP)  
+### 1. `all_protocols` - Fast Protocol Coverage
+**Purpose**: Test all pickle protocols (0-5) with core generation logic  
+**Validation**: Protocol-specific checks (PROTO opcode presence, structural validation)  
 **Speed**: ~5000-10000 execs/sec  
-**Use**: Quick smoke testing, finding crashes
-
-```bash
-cargo fuzz run generate_pickle -- -max_total_time=3600
-```
-
-### 2. `validate_with_pickletools` - Python Validation
-**Purpose**: Validate generated pickles with `pickletools.dis()`  
-**Validation**: Full bytecode structure validation via Python  
-**Speed**: ~100-500 execs/sec (subprocess overhead)  
-**Use**: Ensuring generated pickles are valid
-
-```bash
-cargo fuzz run validate_with_pickletools -- -max_total_time=1800
-```
-
-**Why pickletools.dis()?**
-- ✅ Safer than `pickle.loads()` (no code execution)
-- ✅ Stricter validation (checks bytecode structure)
-- ✅ Better error messages (opcode-level details)
-
-### 3. `all_protocols` - Protocol Coverage
-**Purpose**: Test all pickle protocols (0-5)  
-**Validation**: Protocol-specific checks (PROTO opcode presence)  
-**Speed**: ~5000-10000 execs/sec  
-**Use**: Ensuring all protocol versions work
+**Use**: Primary fast fuzzing target for finding crashes and protocol bugs
 
 ```bash
 cargo fuzz run all_protocols -- -max_total_time=3600
 ```
 
-### 4. `mutate_pickle` - Mutation Stress Test
-**Purpose**: Test mutation system with various configurations  
-**Validation**: Basic structural checks  
-**Speed**: ~3000-5000 execs/sec  
-**Use**: Finding bugs in mutators
+**What it tests:**
+- All 6 protocol versions (V0-V5)
+- Protocol-specific opcode constraints
+- Stack and memo simulation
+- Opcode emission logic
+
+### 2. `validate_with_python` - Thorough Python Validation
+**Purpose**: Comprehensive validation with Python's `pickletools.genops()`  
+**Validation**: Full structural validation via Python interpreter (uses same logic as `scripts/validate-pickles.py`)  
+**Speed**: ~100-500 execs/sec (subprocess overhead)  
+**Use**: Ensuring generated pickles are structurally valid and parseable by Python
 
 ```bash
-cargo fuzz run mutate_pickle -- -max_total_time=3600
+cargo fuzz run validate_with_python -- -max_total_time=1800
 ```
 
-### 5. `opcode_ranges` - Range Testing
-**Purpose**: Test opcode count constraints  
-**Validation**: Opcode count within specified range  
-**Speed**: ~5000-10000 execs/sec  
-**Use**: Ensuring range constraints are respected
+**What it tests:**
+- All protocols (V0-V5)
+- Opcode range configuration (min/max opcodes)
+- Mutation system with all mutators
+- Mutation rate configuration
+- Python compatibility via `pickletools.genops()` validation
 
-```bash
-cargo fuzz run opcode_ranges -- -max_total_time=3600
-```
+**Note**: This target spawns Python subprocesses to validate each generated pickle using the same validation logic as `scripts/validate-pickles.py`.
 
 ## Recommended Workflow
 
-### Phase 1: Fast Discovery (1 hour)
+### Phase 1: Fast Discovery (1-2 hours)
 ```bash
-# Run fast targets to find obvious bugs
-cargo fuzz run generate_pickle -- -max_total_time=1800
-cargo fuzz run all_protocols -- -max_total_time=1800
+# Run fast protocol fuzzing to find crashes
+cargo fuzz run all_protocols -- -max_total_time=7200
 ```
 
-### Phase 2: Thorough Validation (30 minutes)
+### Phase 2: Thorough Validation (30-60 minutes)
 ```bash
-# Validate with Python
-cargo fuzz run validate_with_pickletools -- -max_total_time=1800
+# Validate with Python for semantic correctness
+cargo fuzz run validate_with_python -- -max_total_time=3600
 ```
 
-### Phase 3: Stress Testing (1 hour)
+### Quick Smoke Test (5 minutes)
 ```bash
-# Test mutations and edge cases
-cargo fuzz run mutate_pickle -- -max_total_time=1800
-cargo fuzz run opcode_ranges -- -max_total_time=1800
+# Quick sanity check before commits
+cargo fuzz run all_protocols -- -max_total_time=300
 ```
 
 ## Corpus Management
@@ -102,28 +80,28 @@ cargo fuzz run opcode_ranges -- -max_total_time=1800
 ### Generate Initial Corpus
 ```bash
 # Use pickle-whip CLI to generate diverse samples
-mkdir -p corpus/generate_pickle
-cargo run --release -- --dir corpus/generate_pickle --samples 100
+mkdir -p corpus/all_protocols
+cargo run --release -- --dir corpus/all_protocols --samples 100
 ```
 
 ### Run with Corpus
 ```bash
-cargo fuzz run generate_pickle corpus/generate_pickle
+cargo fuzz run all_protocols corpus/all_protocols
 ```
 
 ### Minimize Corpus
 ```bash
 # Remove redundant test cases
-cargo fuzz cmin generate_pickle
+cargo fuzz cmin all_protocols
 ```
 
 ### Merge Corpora
 ```bash
 # Combine multiple corpora
-cargo fuzz run generate_pickle -- \
+cargo fuzz run all_protocols -- \
     -merge=1 \
-    corpus/generate_pickle \
-    corpus/all_protocols
+    corpus/all_protocols \
+    corpus/validate_with_python
 ```
 
 ## Handling Crashes
@@ -131,19 +109,19 @@ cargo fuzz run generate_pickle -- \
 ### Reproduce a Crash
 ```bash
 # Run specific crashing input
-cargo fuzz run generate_pickle fuzz/artifacts/generate_pickle/crash-abc123
+cargo fuzz run all_protocols fuzz/artifacts/all_protocols/crash-abc123
 ```
 
 ### Minimize Crashing Input
 ```bash
 # Find smallest input that triggers crash
-cargo fuzz tmin generate_pickle fuzz/artifacts/generate_pickle/crash-abc123
+cargo fuzz tmin all_protocols fuzz/artifacts/all_protocols/crash-abc123
 ```
 
 ### Debug with Assertions
 ```bash
 # Build with debug assertions
-cargo fuzz run --debug-assertions generate_pickle fuzz/artifacts/...
+cargo fuzz run --debug-assertions all_protocols fuzz/artifacts/...
 ```
 
 ## Coverage Analysis
@@ -151,13 +129,13 @@ cargo fuzz run --debug-assertions generate_pickle fuzz/artifacts/...
 ### Generate Coverage Report
 ```bash
 # Run fuzzing with coverage instrumentation
-cargo fuzz coverage generate_pickle
+cargo fuzz coverage all_protocols
 
 # Generate HTML report (requires llvm-cov)
 cargo cov -- show \
-    target/x86_64-unknown-linux-gnu/release/generate_pickle \
+    target/x86_64-unknown-linux-gnu/release/all_protocols \
     --format=html \
-    --instr-profile=fuzz/coverage/generate_pickle/coverage.profdata \
+    --instr-profile=fuzz/coverage/all_protocols/coverage.profdata \
     --output-dir=fuzz/coverage/html
 ```
 
@@ -171,22 +149,22 @@ open fuzz/coverage/html/index.html
 ### Increase Speed
 ```bash
 # Limit max input size
-cargo fuzz run generate_pickle -- -max_len=1000
+cargo fuzz run all_protocols -- -max_len=1000
 
 # Increase RSS limit
-cargo fuzz run generate_pickle -- -rss_limit_mb=4096
+cargo fuzz run all_protocols -- -rss_limit_mb=4096
 
 # Use multiple workers
-cargo fuzz run generate_pickle -- -workers=4
+cargo fuzz run all_protocols -- -workers=4
 ```
 
 ### Focus on Specific Areas
 ```bash
 # Use dictionary for guided fuzzing
-cargo fuzz run generate_pickle -- -dict=dictionaries/pickle.dict
+cargo fuzz run all_protocols -- -dict=dictionaries/pickle.dict
 
 # Focus on specific opcodes
-cargo fuzz run generate_pickle -- -focus_function=emit_int
+cargo fuzz run all_protocols -- -focus_function=emit_int
 ```
 
 ## Continuous Fuzzing
@@ -194,7 +172,7 @@ cargo fuzz run generate_pickle -- -focus_function=emit_int
 ### Run Overnight
 ```bash
 # 8-hour campaign
-nohup cargo fuzz run generate_pickle -- \
+nohup cargo fuzz run all_protocols -- \
     -max_total_time=28800 \
     -print_final_stats=1 \
     > fuzz_log.txt 2>&1 &
@@ -206,22 +184,20 @@ nohup cargo fuzz run generate_pickle -- \
 tail -f fuzz_log.txt
 
 # Check corpus growth
-watch -n 60 'ls -lh corpus/generate_pickle | wc -l'
+watch -n 60 'ls -lh corpus/all_protocols | wc -l'
 ```
 
-## Validation Comparison
+## Target Comparison
 
-### pickletools.dis() vs pickle.loads()
+| Aspect | all_protocols | validate_with_python |
+|--------|---------------|----------------------|
+| **Speed** | ⚡ Fast (5-10K exec/s) | 🐌 Slow (100-500 exec/s) |
+| **Coverage** | All protocols | All protocols + mutations |
+| **Validation** | Structural | Semantic (Python) |
+| **Use Case** | Fast discovery | Thorough validation |
+| **Best For** | Finding crashes | Ensuring correctness |
 
-| Aspect | pickletools.dis() | pickle.loads() |
-|--------|-------------------|----------------|
-| **Safety** | ✅ No execution | ⚠️ Executes code |
-| **Strictness** | ✅ Validates structure | ⚠️ Lenient |
-| **Speed** | ✅ Fast parsing | ⚠️ Slower |
-| **Errors** | ✅ Detailed | ⚠️ Generic |
-| **Use Case** | Validation | Integration testing |
-
-**Recommendation**: Use `pickletools.dis()` for fuzzing validation.
+**Recommendation**: Start with `all_protocols` for speed, then validate with `validate_with_python`.
 
 ## Troubleshooting
 
@@ -233,18 +209,50 @@ sudo apt install python3  # Linux
 ```
 
 ### "Slow execution"
-- Use `generate_pickle` instead of `validate_with_pickletools` for speed
+- Use `all_protocols` instead of `validate_with_python` for speed
 - Reduce `-max_len` to limit input size
 - Increase `-rss_limit_mb` if running out of memory
 
 ### "No new coverage"
-- Minimize corpus: `cargo fuzz cmin generate_pickle`
-- Try different targets: `all_protocols`, `mutate_pickle`
+- Minimize corpus: `cargo fuzz cmin all_protocols`
+- Switch targets: try `validate_with_python` for different code paths
 - Use dictionary: `-dict=dictionaries/pickle.dict`
 
 ## Integration with CI
 
-See `.github/workflows/fuzz.yml` for continuous fuzzing setup.
+The project includes automated fuzzing via GitHub Actions (`.github/workflows/fuzz.yml`):
+
+### Automatic Runs
+
+- **Pull Requests & Pushes**: 5-minute fast fuzzing with `all_protocols`
+- **Daily (2 AM UTC)**: 30-minute thorough fuzzing with `validate_with_python`
+- **Daily**: Corpus minimization to remove redundant test cases
+
+### Manual Runs
+
+Trigger custom fuzzing via GitHub Actions UI:
+
+1. Go to **Actions** → **Fuzz Testing** → **Run workflow**
+2. Configure:
+   - **Target**: `all_protocols` or `validate_with_python`
+   - **Duration**: Seconds to run (default: 600)
+
+### Crash Handling
+
+If fuzzing finds crashes:
+- ❌ Workflow fails with error
+- 📦 Crash artifacts uploaded for download
+- 🔍 Review artifacts to reproduce locally:
+  ```bash
+  # Download crash artifact from GitHub Actions
+  cargo fuzz run all_protocols path/to/crash-file
+  ```
+
+### Corpus Management
+
+- Corpus is cached between runs for faster fuzzing
+- Daily minimization removes redundant test cases
+- Corpus statistics reported in workflow summary
 
 ## Resources
 
