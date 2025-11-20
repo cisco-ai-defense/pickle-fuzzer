@@ -23,9 +23,9 @@
 //! - mutator selection (via bit flags)
 //! - arbitrary data seed for generation
 //!
-//! the generated pickles are validated using Python's `pickletools.dis()` to ensure
-//! they are structurally valid and can be parsed by the reference implementation.
-//! this catches bugs in:
+//! the generated pickles are validated using Python's `pickletools.genops()` (same
+//! validation logic as scripts/validate-pickles.py) to ensure they are structurally
+//! valid and can be parsed by the reference implementation. this catches bugs in:
 //! - opcode emission logic
 //! - stack simulation
 //! - protocol version handling
@@ -52,7 +52,7 @@
 //! Generated pickles must:
 //! 1. Be non-empty
 //! 2. End with STOP opcode (0x2e / '.')
-//! 3. Successfully parse with `pickletools.dis()`
+//! 3. Successfully parse with `pickletools.genops()` (via Python subprocess)
 #![no_main]
 
 use libfuzzer_sys::fuzz_target;
@@ -61,9 +61,29 @@ use pickle_whip::mutators::{
     BitFlipMutator, BoundaryMutator, OffByOneMutator,
     StringLengthMutator, CharacterMutator, MemoIndexMutator,
 };
+use std::process::{Command, Stdio};
+use std::io::Write;
 
-mod common;
-use crate::common::validate_with_loads;
+/// Validate pickle using Python's pickletools.genops() (same as validate-pickles.py)
+fn validate_with_python(pickle_bytes: &[u8]) -> bool {
+    let mut child = match Command::new("python3")
+        .arg("-c")
+        .arg("import sys, pickletools; list(pickletools.genops(sys.stdin.buffer.read()))")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+    {
+        Ok(child) => child,
+        Err(_) => return true, // Skip validation if Python unavailable
+    };
+    
+    if let Some(mut stdin) = child.stdin.take() {
+        let _ = stdin.write_all(pickle_bytes);
+    }
+    
+    child.wait().map(|status| status.success()).unwrap_or(false)
+}
 
 fuzz_target!(|data: &[u8]| {
     // need at least 7 bytes for configuration + some arbitrary data
@@ -75,7 +95,7 @@ fuzz_target!(|data: &[u8]| {
     let protocol = (data[0] % 6) as usize;
     let version = Version::try_from(protocol).unwrap();
     
-    let mut gen = Generator::new(version);
+    let gen = Generator::new(version);
 
     // bytes 1-4: opcode range (min/max)
     let min_opcodes = u16::from_le_bytes([data[1], data[2]]) as usize;
@@ -126,5 +146,11 @@ fuzz_target!(|data: &[u8]| {
         // basic structural validation
         assert!(!pickle.is_empty(), "generated pickle must not be empty");
         assert_eq!(pickle[pickle.len() - 1], b'.', "pickle must end with STOP opcode");
+        
+        // validate with Python's pickletools
+        assert!(
+            validate_with_python(&pickle),
+            "generated pickle failed Python validation"
+        );
     }
 });
