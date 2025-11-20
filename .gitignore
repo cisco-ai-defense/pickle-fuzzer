@@ -19,10 +19,6 @@ target/criterion/
 
 # development artifacts and logs
 *.log
-results.txt
-report.json
-modules.txt
-test.pkl
 
 # python fuzzing corpus (keep directory structure, ignore contents)
-python/examples/fuzz-corpus/*.pkl
+python/examples/fuzz-corpus/
