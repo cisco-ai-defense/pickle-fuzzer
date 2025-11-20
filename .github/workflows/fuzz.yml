@@ -1,0 +1,230 @@
+name: Fuzz Testing
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  schedule:
+    # Run daily at 2 AM UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+    inputs:
+      duration:
+        description: 'Fuzzing duration in seconds'
+        required: false
+        default: '600'
+      target:
+        description: 'Fuzz target to run (all_protocols or validate_with_python)'
+        required: false
+        default: 'all_protocols'
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  fuzz-fast:
+    name: Fast Fuzzing (all_protocols)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' || github.event_name == 'push'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@nightly
+
+      - name: Install cargo-fuzz
+        run: cargo install cargo-fuzz
+
+      - name: Cache fuzz corpus
+        uses: actions/cache@v4
+        with:
+          path: fuzz/corpus/all_protocols
+          key: fuzz-corpus-all-protocols-${{ github.sha }}
+          restore-keys: |
+            fuzz-corpus-all-protocols-
+
+      - name: Run fast fuzzing (5 minutes)
+        run: |
+          cargo fuzz run all_protocols -- \
+            -max_total_time=300 \
+            -print_final_stats=1 \
+            -verbosity=1
+        continue-on-error: true
+
+      - name: Check for crashes
+        if: always()
+        run: |
+          if [ -d "fuzz/artifacts/all_protocols" ] && [ "$(ls -A fuzz/artifacts/all_protocols)" ]; then
+            echo "::error::Fuzzing found crashes!"
+            ls -la fuzz/artifacts/all_protocols/
+            exit 1
+          fi
+
+      - name: Upload crash artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-crashes-all-protocols
+          path: fuzz/artifacts/all_protocols/
+          if-no-files-found: ignore
+
+  fuzz-thorough:
+    name: Thorough Fuzzing (validate_with_python)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@nightly
+
+      - name: Install Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install cargo-fuzz
+        run: cargo install cargo-fuzz
+
+      - name: Cache fuzz corpus
+        uses: actions/cache@v4
+        with:
+          path: fuzz/corpus/validate_with_python
+          key: fuzz-corpus-validate-python-${{ github.sha }}
+          restore-keys: |
+            fuzz-corpus-validate-python-
+
+      - name: Determine fuzzing duration
+        id: duration
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "duration=${{ github.event.inputs.duration }}" >> $GITHUB_OUTPUT
+          else
+            echo "duration=1800" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Run thorough fuzzing with Python validation
+        run: |
+          cargo fuzz run validate_with_python -- \
+            -max_total_time=${{ steps.duration.outputs.duration }} \
+            -print_final_stats=1 \
+            -verbosity=1
+        continue-on-error: true
+
+      - name: Check for crashes
+        if: always()
+        run: |
+          if [ -d "fuzz/artifacts/validate_with_python" ] && [ "$(ls -A fuzz/artifacts/validate_with_python)" ]; then
+            echo "::error::Fuzzing found crashes!"
+            ls -la fuzz/artifacts/validate_with_python/
+            exit 1
+          fi
+
+      - name: Upload crash artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-crashes-validate-python
+          path: fuzz/artifacts/validate_with_python/
+          if-no-files-found: ignore
+
+  fuzz-custom:
+    name: Custom Fuzzing Run
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@nightly
+
+      - name: Install Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install cargo-fuzz
+        run: cargo install cargo-fuzz
+
+      - name: Cache fuzz corpus
+        uses: actions/cache@v4
+        with:
+          path: fuzz/corpus/${{ github.event.inputs.target }}
+          key: fuzz-corpus-${{ github.event.inputs.target }}-${{ github.sha }}
+          restore-keys: |
+            fuzz-corpus-${{ github.event.inputs.target }}-
+
+      - name: Run custom fuzzing
+        run: |
+          cargo fuzz run ${{ github.event.inputs.target }} -- \
+            -max_total_time=${{ github.event.inputs.duration }} \
+            -print_final_stats=1 \
+            -verbosity=1
+        continue-on-error: true
+
+      - name: Check for crashes
+        if: always()
+        run: |
+          if [ -d "fuzz/artifacts/${{ github.event.inputs.target }}" ] && [ "$(ls -A fuzz/artifacts/${{ github.event.inputs.target }})" ]; then
+            echo "::error::Fuzzing found crashes!"
+            ls -la fuzz/artifacts/${{ github.event.inputs.target }}/
+            exit 1
+          fi
+
+      - name: Upload crash artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-crashes-${{ github.event.inputs.target }}
+          path: fuzz/artifacts/${{ github.event.inputs.target }}/
+          if-no-files-found: ignore
+
+  minimize-corpus:
+    name: Minimize Corpus
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule'
+    needs: [fuzz-thorough]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@nightly
+
+      - name: Install cargo-fuzz
+        run: cargo install cargo-fuzz
+
+      - name: Restore corpus
+        uses: actions/cache@v4
+        with:
+          path: |
+            fuzz/corpus/all_protocols
+            fuzz/corpus/validate_with_python
+          key: fuzz-corpus-all-${{ github.sha }}
+          restore-keys: |
+            fuzz-corpus-all-
+
+      - name: Minimize all_protocols corpus
+        run: cargo fuzz cmin all_protocols
+        continue-on-error: true
+
+      - name: Minimize validate_with_python corpus
+        run: cargo fuzz cmin validate_with_python
+        continue-on-error: true
+
+      - name: Report corpus stats
+        run: |
+          echo "## Corpus Statistics" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### all_protocols" >> $GITHUB_STEP_SUMMARY
+          echo "Files: $(find fuzz/corpus/all_protocols -type f | wc -l)" >> $GITHUB_STEP_SUMMARY
+          echo "Size: $(du -sh fuzz/corpus/all_protocols | cut -f1)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### validate_with_python" >> $GITHUB_STEP_SUMMARY
+          echo "Files: $(find fuzz/corpus/validate_with_python -type f | wc -l)" >> $GITHUB_STEP_SUMMARY
+          echo "Size: $(du -sh fuzz/corpus/validate_with_python | cut -f1)" >> $GITHUB_STEP_SUMMARY
