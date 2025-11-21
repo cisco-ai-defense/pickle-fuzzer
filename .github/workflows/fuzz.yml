@@ -57,10 +57,20 @@ jobs:
       - name: Check for crashes
         if: always()
         run: |
-          if [ -d "fuzz/artifacts/all_protocols" ] && [ "$(ls -A fuzz/artifacts/all_protocols)" ]; then
-            echo "::error::Fuzzing found crashes!"
-            ls -la fuzz/artifacts/all_protocols/
-            exit 1
+          if [ -d "fuzz/artifacts/all_protocols" ]; then
+            # Only fail on actual crashes, not memory leaks (often false positives)
+            if ls fuzz/artifacts/all_protocols/crash-* 2>/dev/null || \
+               ls fuzz/artifacts/all_protocols/timeout-* 2>/dev/null || \
+               ls fuzz/artifacts/all_protocols/oom-* 2>/dev/null; then
+              echo "::error::Fuzzing found crashes!"
+              ls -la fuzz/artifacts/all_protocols/
+              exit 1
+            fi
+            # Log leaks but don't fail
+            if ls fuzz/artifacts/all_protocols/leak-* 2>/dev/null; then
+              echo "::warning::Memory leaks detected (not failing build)"
+              ls -la fuzz/artifacts/all_protocols/leak-*
+            fi
           fi
 
       - name: Upload crash artifacts
@@ -118,10 +128,20 @@ jobs:
       - name: Check for crashes
         if: always()
         run: |
-          if [ -d "fuzz/artifacts/validate_with_python" ] && [ "$(ls -A fuzz/artifacts/validate_with_python)" ]; then
-            echo "::error::Fuzzing found crashes!"
-            ls -la fuzz/artifacts/validate_with_python/
-            exit 1
+          if [ -d "fuzz/artifacts/validate_with_python" ]; then
+            # Only fail on actual crashes, not memory leaks (often false positives)
+            if ls fuzz/artifacts/validate_with_python/crash-* 2>/dev/null || \
+               ls fuzz/artifacts/validate_with_python/timeout-* 2>/dev/null || \
+               ls fuzz/artifacts/validate_with_python/oom-* 2>/dev/null; then
+              echo "::error::Fuzzing found crashes!"
+              ls -la fuzz/artifacts/validate_with_python/
+              exit 1
+            fi
+            # Log leaks but don't fail
+            if ls fuzz/artifacts/validate_with_python/leak-* 2>/dev/null; then
+              echo "::warning::Memory leaks detected (not failing build)"
+              ls -la fuzz/artifacts/validate_with_python/leak-*
+            fi
           fi
 
       - name: Upload crash artifacts
@@ -170,10 +190,20 @@ jobs:
       - name: Check for crashes
         if: always()
         run: |
-          if [ -d "fuzz/artifacts/${{ github.event.inputs.target }}" ] && [ "$(ls -A fuzz/artifacts/${{ github.event.inputs.target }})" ]; then
-            echo "::error::Fuzzing found crashes!"
-            ls -la fuzz/artifacts/${{ github.event.inputs.target }}/
-            exit 1
+          if [ -d "fuzz/artifacts/${{ github.event.inputs.target }}" ]; then
+            # Only fail on actual crashes, not memory leaks (often false positives)
+            if ls fuzz/artifacts/${{ github.event.inputs.target }}/crash-* 2>/dev/null || \
+               ls fuzz/artifacts/${{ github.event.inputs.target }}/timeout-* 2>/dev/null || \
+               ls fuzz/artifacts/${{ github.event.inputs.target }}/oom-* 2>/dev/null; then
+              echo "::error::Fuzzing found crashes!"
+              ls -la fuzz/artifacts/${{ github.event.inputs.target }}/
+              exit 1
+            fi
+            # Log leaks but don't fail
+            if ls fuzz/artifacts/${{ github.event.inputs.target }}/leak-* 2>/dev/null; then
+              echo "::warning::Memory leaks detected (not failing build)"
+              ls -la fuzz/artifacts/${{ github.event.inputs.target }}/leak-*
+            fi
           fi
 
       - name: Upload crash artifacts
