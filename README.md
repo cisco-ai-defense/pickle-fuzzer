@@ -449,9 +449,6 @@ For detailed development guidelines, see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ### Fuzzing Documentation
 - [fuzz/README.md](fuzz/README.md) - Fuzzing pickle-fuzzer itself with cargo-fuzz
-- [ATHERIS_INTEGRATION_PLAN.md](ATHERIS_INTEGRATION_PLAN.md) - Atheris integration and Python fuzzing
-- [CARGO_FUZZ_PLAN.md](CARGO_FUZZ_PLAN.md) - cargo-fuzz integration details
-- [FUZZING_COMPARISON.md](FUZZING_COMPARISON.md) - Comparison with other fuzzing approaches
 
 ## Community Resources
 
