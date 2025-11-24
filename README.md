@@ -321,8 +321,6 @@ Validated 50000 pickle file(s); 0 failure(s).
 5. **Validation**: Ensure final state is valid (exactly one item on stack)
 6. **Output**: Emit complete pickle bytecode
 
-For detailed architecture documentation, see [AGENTS.md](AGENTS.md).
-
 ## Performance
 
 `pickle-fuzzer` is highly optimized for fast pickle generation with excellent scalability.
