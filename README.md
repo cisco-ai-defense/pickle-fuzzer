@@ -269,8 +269,6 @@ uv run harness.py -workers=4 -jobs=4
 - **Protocol Compliance**: Tests protocol-specific features and edge cases
 - **Deterministic**: Same fuzzer input produces same pickle (reproducible bugs)
 
-For more details on Atheris integration, see [ATHERIS_INTEGRATION_PLAN.md](ATHERIS_INTEGRATION_PLAN.md).
-
 ## How It Works
 
 `pickle-fuzzer` uses a stack-based approach to generate valid pickle bytecode:
