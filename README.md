@@ -448,7 +448,6 @@ For detailed development guidelines, see [CONTRIBUTING.md](CONTRIBUTING.md).
 - [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) - Community guidelines and expectations
 - [TESTING.md](TESTING.md) - Testing procedures and validation
 - [BENCHMARKS.md](BENCHMARKS.md) - Performance benchmarks and optimization
-- [AGENTS.md](AGENTS.md) - Detailed architecture guide for AI assistants and developers
 
 ### Fuzzing Documentation
 - [fuzz/README.md](fuzz/README.md) - Fuzzing pickle-fuzzer itself with cargo-fuzz
