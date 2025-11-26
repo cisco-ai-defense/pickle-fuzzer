@@ -1,11 +1,32 @@
 # Testing Guide
 
+This guide covers all aspects of testing `cisco-ai-defense-pickle-fuzzer`.
+
+## Overview
+
+We maintain comprehensive test coverage across:
+- **Unit tests**: Test individual functions and modules
+- **Integration tests**: Test end-to-end functionality
+- **Doc tests**: Test code examples in documentation
+- **Fuzzing**: Continuous fuzzing with cargo-fuzz
+- **Python tests**: Test Python bindings
+
 ## Running Tests
 
 ### Unit and Integration Tests
 
 ```bash
+# Run all tests
 cargo test
+
+# Run with output
+cargo test -- --nocapture --test-threads=1
+
+# Run specific test
+cargo test test_name
+
+# Run tests in specific file
+cargo test --test integration_test
 ```
 
 ### Code Coverage
@@ -43,7 +64,7 @@ Coverage settings are configured in `tarpaulin.toml`. Current configuration:
 ### Test Organization
 
 ```
-pickle-fuzzer/
+cisco-ai-defense-pickle-fuzzer/
 ├── src/
 │   ├── generator.rs    # Unit tests at bottom of file
 │   └── ...
@@ -107,5 +128,27 @@ See [BENCHMARKS.md](BENCHMARKS.md) for detailed performance analysis and results
 ```bash
 # Profile generation
 cargo build --release
-time ./target/release/pickle-fuzzer --dir samples --samples 10000
+time ./target/release/cisco-ai-defense-pickle-fuzzer --dir samples --samples 10000
 ```
+
+## Python Tests
+
+If you're working on Python bindings:
+
+```bash
+cd python
+pip install pytest
+pytest tests/
+```
+
+## Fuzzing
+
+For fuzzing with cargo-fuzz:
+
+```bash
+cargo install cargo-fuzz
+cargo fuzz list
+cargo fuzz run all_protocols
+```
+
+See [fuzz/README.md](fuzz/README.md) for more details.

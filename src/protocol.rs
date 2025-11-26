@@ -16,7 +16,7 @@
 
 use phf::PhfHash;
 
-/// Pickle protocol versions supported by pickle-fuzzer.
+/// Pickle protocol versions supported by cisco-ai-defense-pickle-fuzzer.
 ///
 /// Python's pickle module supports protocols 0-5, each adding new features:
 /// - V0: Original ASCII protocol (Python 1.x)

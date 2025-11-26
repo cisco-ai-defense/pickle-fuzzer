@@ -15,7 +15,7 @@
 // limitations under the License.
 
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
-use pickle_fuzzer::{Generator, Version};
+use cisco_ai_defense_pickle_fuzzer::{Generator, Version};
 
 fn bench_single_generation(c: &mut Criterion) {
     let mut group = c.benchmark_group("single_generation");

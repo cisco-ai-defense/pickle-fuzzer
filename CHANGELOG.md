@@ -30,7 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.1.0] - 2024-11-19
 
 ### Added
-- Initial release of pickle-fuzzer
+- Initial release of cisco-ai-defense-pickle-fuzzer
 - Structure-aware pickle generation
 - Stack and memo simulation
 - Multi-protocol support (protocols 0-5)

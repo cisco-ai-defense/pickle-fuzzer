@@ -15,19 +15,19 @@
 # SPDX-License-Identifier: Apache-2.0
 
 [package]
-name = "pickle-fuzzer"
+name = "cisco-ai-defense-pickle-fuzzer"
 version = "0.1.0"
 edition = "2021"
 authors = ["Cisco AI Defense"]
 description = "A structure-aware test case generator for Python pickle parsers and validators"
 repository = "https://github.com/cisco-ai-defense/pickle-fuzzer"
 homepage = "https://github.com/cisco-ai-defense/pickle-fuzzer"
-documentation = "https://docs.rs/pickle-fuzzer"
+documentation = "https://docs.rs/cisco-ai-defense-pickle-fuzzer"
 readme = "README.md"
 license = "Apache-2.0"
 keywords = ["fuzzing", "pickle", "security", "testing", "generator", "corpus"]
 categories = ["development-tools::testing", "command-line-utilities"]
-default-run = "pickle-fuzzer"
+default-run = "cisco-ai-defense-pickle-fuzzer"
 
 [features]
 default = []
@@ -52,5 +52,5 @@ name = "generation"
 harness = false
 
 [lib]
-name = "pickle_fuzzer"
+name = "cisco_ai_defense_pickle_fuzzer"
 crate-type = ["rlib", "cdylib"]

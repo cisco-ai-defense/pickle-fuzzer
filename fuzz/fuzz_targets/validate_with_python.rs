@@ -56,8 +56,8 @@
 #![no_main]
 
 use libfuzzer_sys::fuzz_target;
-use pickle_fuzzer::{Generator, Version};
-use pickle_fuzzer::mutators::{
+use cisco_ai_defense_pickle_fuzzer::{Generator, Version};
+use cisco_ai_defense_pickle_fuzzer::mutators::{
     BitFlipMutator, BoundaryMutator, OffByOneMutator,
     StringLengthMutator, CharacterMutator, MemoIndexMutator,
 };

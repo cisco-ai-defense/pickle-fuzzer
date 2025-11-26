@@ -1,6 +1,6 @@
 # Performance Benchmarks
 
-This document contains performance benchmarks for `pickle-fuzzer` using criterion.
+This document contains performance benchmarks for `cisco-ai-defense-pickle-fuzzer` using criterion.
 
 ## System Information
 
@@ -133,28 +133,28 @@ Detailed performance across complexity levels:
 ### For Maximum Performance
 ```bash
 # Use Protocol V1 or V2
-pickle-fuzzer --protocol 1 output.pkl
+cisco-ai-defense-pickle-fuzzer --protocol 1 output.pkl
 
 # Use seeded generation
-pickle-fuzzer --seed 42 output.pkl
+cisco-ai-defense-pickle-fuzzer --seed 42 output.pkl
 
 # Use smaller opcode ranges for faster generation
-pickle-fuzzer --min-opcodes 10 --max-opcodes 50 output.pkl
+cisco-ai-defense-pickle-fuzzer --min-opcodes 10 --max-opcodes 50 output.pkl
 ```
 
 ### For Balanced Performance
 ```bash
 # Default settings are well-optimized
-pickle-fuzzer output.pkl
+cisco-ai-defense-pickle-fuzzer output.pkl
 
 # Or explicitly:
-pickle-fuzzer --protocol 3 --min-opcodes 60 --max-opcodes 300 output.pkl
+cisco-ai-defense-pickle-fuzzer --protocol 3 --min-opcodes 60 --max-opcodes 300 output.pkl
 ```
 
 ### For Maximum Coverage
 ```bash
 # Use larger opcode ranges (still fast!)
-pickle-fuzzer --min-opcodes 200 --max-opcodes 1000 output.pkl
+cisco-ai-defense-pickle-fuzzer --min-opcodes 200 --max-opcodes 1000 output.pkl
 ```
 
 ## Running Benchmarks

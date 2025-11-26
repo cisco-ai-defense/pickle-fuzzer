@@ -14,7 +14,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use pickle_fuzzer::{Generator, Version};
+use cisco_ai_defense_pickle_fuzzer::{Generator, Version};
 
 #[test]
 fn test_generate_all_protocol_versions() {

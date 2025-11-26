@@ -1,6 +1,6 @@
-# Fuzzing pickle-fuzzer with cargo-fuzz
+# Fuzzing cisco-ai-defense-pickle-fuzzer with cargo-fuzz
 
-This directory contains fuzz targets for testing pickle-fuzzer's generation logic using libFuzzer via cargo-fuzz.
+This directory contains fuzz targets for testing cisco-ai-defense-pickle-fuzzer's generation logic using libFuzzer via cargo-fuzz.
 
 ## Quick Start
 
@@ -79,7 +79,7 @@ cargo fuzz run all_protocols -- -max_total_time=300
 
 ### Generate Initial Corpus
 ```bash
-# Use pickle-fuzzer CLI to generate diverse samples
+# Use cisco-ai-defense-pickle-fuzzer CLI to generate diverse samples
 mkdir -p corpus/all_protocols
 cargo run --release -- --dir corpus/all_protocols --samples 100
 ```

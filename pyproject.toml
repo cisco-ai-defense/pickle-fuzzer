@@ -15,7 +15,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 [project]
-name = "pickle-fuzzer"
+name = "cisco-ai-defense-pickle-fuzzer"
 version = "0.1.0"
 description = "Structure-aware pickle generator for fuzzing"
 readme = "README.md"
@@ -31,7 +31,7 @@ build-backend = "maturin"
 [tool.maturin]
 features = ["python-bindings"]
 python-source = "python"
-module-name = "pickle_fuzzer._native"
+module-name = "cisco_ai_defense_pickle_fuzzer._native"
 
 [dependency-groups]
 dev = [

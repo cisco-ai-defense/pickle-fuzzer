@@ -22,3 +22,6 @@ target/criterion/
 
 # python fuzzing corpus (keep directory structure, ignore contents)
 python/examples/fuzz-corpus/
+
+# python version file (developers can create locally if using pyenv)
+.python-version

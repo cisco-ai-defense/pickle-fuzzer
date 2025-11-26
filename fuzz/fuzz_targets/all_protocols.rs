@@ -17,7 +17,7 @@
 
 
 use libfuzzer_sys::fuzz_target;
-use pickle_fuzzer::{Generator, Version};
+use cisco_ai_defense_pickle_fuzzer::{Generator, Version};
 
 fuzz_target!(|data: &[u8]| {
     if data.is_empty() {

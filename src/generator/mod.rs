@@ -72,7 +72,7 @@ use super::state::State;
 /// # Examples
 ///
 /// ```no_run
-/// use pickle_fuzzer::{Generator, Version};
+/// use cisco_ai_defense_pickle_fuzzer::{Generator, Version};
 ///
 /// // basic generation with random seed
 /// let mut gen = Generator::new(Version::V4);
@@ -141,7 +141,7 @@ impl Generator {
     /// # Examples
     ///
     /// ```no_run
-    /// use pickle_fuzzer::{Generator, Version};
+    /// use cisco_ai_defense_pickle_fuzzer::{Generator, Version};
     ///
     /// let gen = Generator::new(Version::V3);
     /// ```
@@ -160,7 +160,7 @@ impl Generator {
     /// # Examples
     ///
     /// ```no_run
-    /// use pickle_fuzzer::{Generator, Version};
+    /// use cisco_ai_defense_pickle_fuzzer::{Generator, Version};
     ///
     /// let mut gen = Generator::new(Version::V3);
     /// let pickle1 = gen.generate().unwrap();
@@ -204,7 +204,7 @@ impl Generator {
     /// # Examples
     ///
     /// ```no_run
-    /// use pickle_fuzzer::{Generator, Version};
+    /// use cisco_ai_defense_pickle_fuzzer::{Generator, Version};
     ///
     /// let gen = Generator::new(Version::V3)
     ///     .with_opcode_range(10, 50);
@@ -275,7 +275,7 @@ impl Generator {
     /// # Examples
     ///
     /// ```no_run
-    /// use pickle_fuzzer::{Generator, Version};
+    /// use cisco_ai_defense_pickle_fuzzer::{Generator, Version};
     ///
     /// let fuzzer_input = b"fuzzer_bytes_here";
     /// let mut gen = Generator::new(Version::V3);

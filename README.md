@@ -1,10 +1,10 @@
-# pickle-fuzzer
+# cisco-ai-defense-pickle-fuzzer
 
-A structure-aware test case generator for Python pickle parsers and validators. `pickle-fuzzer` generates complex, valid pickle bytecode across all protocol versions (0-5) for use in fuzzing and testing pickle parsing implementations.
+A structure-aware test case generator for Python pickle parsers and validators. `cisco-ai-defense-pickle-fuzzer` generates complex, valid pickle bytecode across all protocol versions (0-5) for use in fuzzing and testing pickle parsing implementations.
 
 ## Project Description
 
-`pickle-fuzzer` is a Rust-based tool designed to help security researchers and developers test Python pickle parsing implementations. Unlike traditional fuzzers that generate random bytes, `pickle-fuzzer` understands pickle's structure and generates syntactically valid pickle bytecode that exercises edge cases, complex opcode sequences, and protocol-specific features.
+`cisco-ai-defense-pickle-fuzzer` is a Rust-based tool designed to help security researchers and developers test Python pickle parsing implementations. Unlike traditional fuzzers that generate random bytes, `cisco-ai-defense-pickle-fuzzer` understands pickle's structure and generates syntactically valid pickle bytecode that exercises edge cases, complex opcode sequences, and protocol-specific features.
 
 **Key Use Cases:**
 - Fuzzing pickle parsers and validators for security vulnerabilities
@@ -14,7 +14,7 @@ A structure-aware test case generator for Python pickle parsers and validators. 
 
 ## Overview
 
-`pickle-fuzzer` provides a structure-aware approach to generating pickle test cases with proper opcode sequencing, stack/memo simulation, and protocol version compliance. It produces diverse pickle bytecode that can be used with fuzzing frameworks or standalone testing to discover bugs and edge cases in pickle parsing implementations.
+`cisco-ai-defense-pickle-fuzzer` provides a structure-aware approach to generating pickle test cases with proper opcode sequencing, stack/memo simulation, and protocol version compliance. It produces diverse pickle bytecode that can be used with fuzzing frameworks or standalone testing to discover bugs and edge cases in pickle parsing implementations.
 
 ## Features
 
@@ -39,7 +39,7 @@ cd pickle-fuzzer
 cargo build --release
 ```
 
-The binary will be available at `target/release/pickle-fuzzer`.
+The binary will be available at `target/release/cisco-ai-defense-pickle-fuzzer`.
 
 **Build Requirements:**
 - Rust toolchain 1.70 or later
@@ -48,7 +48,7 @@ The binary will be available at `target/release/pickle-fuzzer`.
 ### Installing from Crates.io
 
 ```bash
-cargo install pickle-fuzzer
+cargo install cisco-ai-defense-pickle-fuzzer
 ```
 
 ## Usage
@@ -57,7 +57,7 @@ cargo install pickle-fuzzer
 
 ```bash
 # Generate a random pickle file
-pickle-fuzzer output.pkl
+cisco-ai-defense-pickle-fuzzer output.pkl
 
 # The protocol version is randomly selected (0-5)
 ```
@@ -66,7 +66,7 @@ pickle-fuzzer output.pkl
 
 ```bash
 # Generate 100 pickle files in the samples directory
-pickle-fuzzer --dir samples --samples 100
+cisco-ai-defense-pickle-fuzzer --dir samples --samples 100
 
 # Files will be named 0.pkl, 1.pkl, 2.pkl, etc.
 ```
@@ -74,7 +74,7 @@ pickle-fuzzer --dir samples --samples 100
 ### Command-Line Options
 
 ```
-Usage: pickle-fuzzer [OPTIONS] [FILE]
+Usage: cisco-ai-defense-pickle-fuzzer [OPTIONS] [FILE]
 
 Arguments:
   [FILE]  Output file path (for single file mode)
@@ -88,7 +88,7 @@ Options:
 
 ## Python Bindings
 
-`pickle-fuzzer` provides Python bindings for integration with Python-based fuzzing tools like Atheris.
+`cisco-ai-defense-pickle-fuzzer` provides Python bindings for integration with Python-based fuzzing tools like Atheris.
 
 ### Installation
 
@@ -102,7 +102,7 @@ maturin develop --release
 ### Basic Usage
 
 ```python
-from pickle_fuzzer import Generator
+from cisco_ai_defense_pickle_fuzzer import Generator
 
 # Create generator for protocol 3
 gen = Generator(protocol=3)
@@ -125,7 +125,7 @@ Use the `PickleMutator` class for structure-aware fuzzing:
 
 ```python
 import atheris
-from pickle_fuzzer.fuzzer import PickleMutator
+from cisco_ai_defense_pickle_fuzzer.fuzzer import PickleMutator
 import pickle
 
 mutator = PickleMutator(protocol=3)
@@ -146,9 +146,9 @@ atheris.Fuzz()
 
 See [python/examples/harness.py](python/examples/harness.py) for a complete example.
 
-## Fuzzing pickle-fuzzer Itself
+## Fuzzing cisco-ai-defense-pickle-fuzzer Itself
 
-`pickle-fuzzer` includes comprehensive fuzz targets for testing its own generation logic using cargo-fuzz (libFuzzer).
+`cisco-ai-defense-pickle-fuzzer` includes comprehensive fuzz targets for testing its own generation logic using cargo-fuzz (libFuzzer).
 
 ### Quick Start
 
@@ -195,7 +195,7 @@ For detailed fuzzing documentation, see [fuzz/README.md](fuzz/README.md).
 
 ## Fuzzing Other Python Projects with Atheris
 
-`pickle-fuzzer` can be used to fuzz any Python project that parses pickle data.
+`cisco-ai-defense-pickle-fuzzer` can be used to fuzz any Python project that parses pickle data.
 
 ### Fuzzing Custom Pickle Parsers
 
@@ -203,7 +203,7 @@ For detailed fuzzing documentation, see [fuzz/README.md](fuzz/README.md).
 #!/usr/bin/env python3
 import atheris
 import sys
-from pickle_fuzzer.fuzzer import fuzz_pickle_parser
+from cisco_ai_defense_pickle_fuzzer.fuzzer import fuzz_pickle_parser
 
 # Your custom pickle parser
 def my_pickle_parser(data: bytes):
@@ -225,7 +225,7 @@ if __name__ == "__main__":
 ```python
 import atheris
 import pickle
-from pickle_fuzzer.fuzzer import PickleMutator
+from cisco_ai_defense_pickle_fuzzer.fuzzer import PickleMutator
 
 class CustomUnpickler(pickle.Unpickler):
     def find_class(self, module, name):
@@ -271,7 +271,7 @@ uv run harness.py -workers=4 -jobs=4
 
 ## How It Works
 
-`pickle-fuzzer` uses a stack-based approach to generate valid pickle bytecode:
+`cisco-ai-defense-pickle-fuzzer` uses a stack-based approach to generate valid pickle bytecode:
 
 1. **Stack/Memo Simulation**: Maintains an internal stack and memo that mirrors the pickle machine's behavior
 2. **Opcode Validation**: Only emits opcodes that are valid given the current stack state
@@ -300,7 +300,7 @@ Validated 50000 pickle file(s); 0 failure(s).
 
 ## Architecture Overview
 
-`pickle-fuzzer` uses a simulation-based approach to generate valid pickle bytecode:
+`cisco-ai-defense-pickle-fuzzer` uses a simulation-based approach to generate valid pickle bytecode:
 
 ### Core Components
 
@@ -321,7 +321,7 @@ Validated 50000 pickle file(s); 0 failure(s).
 
 ## Performance
 
-`pickle-fuzzer` is highly optimized for fast pickle generation with excellent scalability.
+`cisco-ai-defense-pickle-fuzzer` is highly optimized for fast pickle generation with excellent scalability.
 
 ### Benchmark Results
 
@@ -366,20 +366,20 @@ open target/criterion/report/index.html
 
 ```bash
 # Use seeded generation for 2x speedup
-pickle-fuzzer --seed 42 output.pkl
+cisco-ai-defense-pickle-fuzzer --seed 42 output.pkl
 
 # Use faster protocols (V1 or V2)
-pickle-fuzzer --protocol 1 output.pkl
+cisco-ai-defense-pickle-fuzzer --protocol 1 output.pkl
 
 # Smaller opcode ranges generate faster
-pickle-fuzzer --min-opcodes 10 --max-opcodes 50 output.pkl
+cisco-ai-defense-pickle-fuzzer --min-opcodes 10 --max-opcodes 50 output.pkl
 ```
 
 For detailed benchmark analysis, see [BENCHMARKS.md](BENCHMARKS.md).
 
 ## Safety Warning
 
-**Important**: `pickle-fuzzer` generates potentially malicious pickle data for testing purposes only. 
+**Important**: `cisco-ai-defense-pickle-fuzzer` generates potentially malicious pickle data for testing purposes only. 
 
 - **DO NOT** use generated pickles in production systems
 - **DO NOT** unpickle generated data without proper sandboxing
@@ -388,7 +388,7 @@ For detailed benchmark analysis, see [BENCHMARKS.md](BENCHMARKS.md).
 
 ## Development Setup
 
-For contributors and developers working on `pickle-fuzzer`:
+For contributors and developers working on `cisco-ai-defense-pickle-fuzzer`:
 
 ### Setting Up Your Environment
 
@@ -443,12 +443,13 @@ For detailed development guidelines, see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ### Core Documentation
 - [CONTRIBUTING.md](CONTRIBUTING.md) - How to contribute to the project
-- [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) - Community guidelines and expectations
+- [DEVELOPING.md](DEVELOPING.md) - Development setup and workflows
 - [TESTING.md](TESTING.md) - Testing procedures and validation
 - [BENCHMARKS.md](BENCHMARKS.md) - Performance benchmarks and optimization
+- [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) - Community guidelines and expectations
 
 ### Fuzzing Documentation
-- [fuzz/README.md](fuzz/README.md) - Fuzzing pickle-fuzzer itself with cargo-fuzz
+- [fuzz/README.md](fuzz/README.md) - Fuzzing cisco-ai-defense-pickle-fuzzer itself with cargo-fuzz
 
 ## Community Resources
 

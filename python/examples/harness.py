@@ -18,7 +18,7 @@
 """Example Atheris harness for fuzzing Python's pickle module."""
 
 import atheris
-from pickle_fuzzer.fuzzer import PickleMutator
+from cisco_ai_defense_pickle_fuzzer.fuzzer import PickleMutator
 
 with atheris.instrument_imports():
     import sys

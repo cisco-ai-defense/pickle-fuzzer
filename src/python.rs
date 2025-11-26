@@ -14,7 +14,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Python bindings for pickle-fuzzer generator.
+//! Python bindings for cisco-ai-defense-pickle-fuzzer generator.
 //!
 //! This module provides a Python interface to the Rust-based pickle generator
 //! using PyO3. It allows Python code to generate pickle bytecode with the same

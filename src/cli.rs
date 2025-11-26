@@ -32,13 +32,13 @@ fn parse_version(s: &str) -> Result<usize, String> {
     }
 }
 
-/// Command-line interface for pickle-fuzzer.
+/// Command-line interface for cisco-ai-defense-pickle-fuzzer.
 ///
 /// Supports two modes:
 /// - Single file mode: Generate one pickle file
 /// - Batch mode: Generate multiple pickle files in a directory
 #[derive(Parser, Debug)]
-#[command(name = "pickle-fuzzer")]
+#[command(name = "cisco-ai-defense-pickle-fuzzer")]
 #[command(version, about, long_about = None)]
 pub struct Cli {
     /// path to a single pickle output file

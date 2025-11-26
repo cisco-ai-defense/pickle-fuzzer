@@ -14,7 +14,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""Atheris integration utilities for pickle-fuzzer fuzzing."""
+"""Atheris integration utilities for cisco-ai-defense-pickle-fuzzer fuzzing."""
 import sys
 from typing import Optional, Callable
 
@@ -26,14 +26,14 @@ from . import Generator
 class PickleMutator:
     """structure-aware mutator for pickle fuzzing with atheris.
     
-    this class provides a bridge between atheris fuzzing and pickle-fuzzer's
+    this class provides a bridge between atheris fuzzing and cisco-ai-defense-pickle-fuzzer's
     structure-aware generation. it can be used as a custom mutator in atheris
     to generate valid pickle bytecode from fuzzer input.
     
     example:
         ```python
         import atheris
-        from pickle_fuzzer.fuzzer import PickleMutator
+        from cisco_ai_defense_pickle_fuzzer.fuzzer import PickleMutator
         
         mutator = PickleMutator(protocol=4)
         

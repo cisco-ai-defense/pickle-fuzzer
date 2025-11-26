@@ -13,7 +13,7 @@
 # limitations under the License.
 #
 # SPDX-License-Identifier: Apache-2.0
-from pickle_fuzzer._native import Generator
+from cisco_ai_defense_pickle_fuzzer._native import Generator
 
 __version__ = "0.1.0"
 __all__ = ["Generator"]
