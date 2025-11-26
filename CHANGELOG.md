@@ -18,19 +18,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Atheris integration for structure-aware fuzzing
 - Fuzzing targets with cargo-fuzz
 - Support for all pickle protocol versions (0-5)
+- CLI flags `--allow-ext` and `--allow-buffer` for opt-in opcode generation
+- `--mutators all` option that excludes unsafe mutators by default
+- Memo index validation for GET opcodes with unsafe mode bypass
 
 ### Changed
 - Updated CONTRIBUTING.md with detailed guidelines
 - Enhanced README.md with comprehensive documentation
 - Improved error handling throughout codebase
+- EXT and buffer opcodes now disabled by default, require explicit flags
+- MemoIndexMutator excluded from fuzzer validation target
+- Performance improvements: 10-20% faster across all benchmark categories
 
 ### Fixed
-- Various code quality improvements based on clippy suggestions
+- Stack not empty after STOP errors in pickle validation
+- DUP opcode incorrectly duplicating MARK objects
+- Buffer opcodes (NEXT_BUFFER, READONLY_BUFFER) causing validation failures
+- EXT opcodes generating without configured extension registry
+- STRING opcode missing escape sequences for special characters
+- UNICODE opcode generating invalid escape sequences with backslashes
+- GET/BinGet/LongBinGet using mutated memo indices that don't exist
+- Memo mutator generating invalid references even in safe mode
 
 ## [0.1.0] - 2024-11-19
 
 ### Added
-- Initial release of cisco-ai-defense-pickle-fuzzer
+- Initial release of pickle-fuzzer
 - Structure-aware pickle generation
 - Stack and memo simulation
 - Multi-protocol support (protocols 0-5)

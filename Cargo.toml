@@ -27,7 +27,10 @@ readme = "README.md"
 license = "Apache-2.0"
 keywords = ["fuzzing", "pickle", "security", "testing", "generator", "corpus"]
 categories = ["development-tools::testing", "command-line-utilities"]
-default-run = "cisco-ai-defense-pickle-fuzzer"
+
+[[bin]]
+name = "pickle-fuzzer"
+path = "src/main.rs"
 
 [features]
 default = []
@@ -52,5 +55,6 @@ name = "generation"
 harness = false
 
 [lib]
-name = "cisco_ai_defense_pickle_fuzzer"
+name = "pickle_fuzzer"
+path = "src/lib.rs"
 crate-type = ["rlib", "cdylib"]

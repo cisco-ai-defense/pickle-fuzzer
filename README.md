@@ -1,10 +1,10 @@
-# cisco-ai-defense-pickle-fuzzer
+# pickle-fuzzer
 
-A structure-aware test case generator for Python pickle parsers and validators. `cisco-ai-defense-pickle-fuzzer` generates complex, valid pickle bytecode across all protocol versions (0-5) for use in fuzzing and testing pickle parsing implementations.
+A structure-aware test case generator for Python pickle parsers and validators. `pickle-fuzzer` generates complex, valid pickle bytecode across all protocol versions (0-5) for use in fuzzing and testing pickle parsing implementations.
 
 ## Project Description
 
-`cisco-ai-defense-pickle-fuzzer` is a Rust-based tool designed to help security researchers and developers test Python pickle parsing implementations. Unlike traditional fuzzers that generate random bytes, `cisco-ai-defense-pickle-fuzzer` understands pickle's structure and generates syntactically valid pickle bytecode that exercises edge cases, complex opcode sequences, and protocol-specific features.
+`pickle-fuzzer` is a Rust-based tool designed to help security researchers and developers test Python pickle parsing implementations. Unlike traditional fuzzers that generate random bytes, `pickle-fuzzer` understands pickle's structure and generates syntactically valid pickle bytecode that exercises edge cases, complex opcode sequences, and protocol-specific features.
 
 **Key Use Cases:**
 - Fuzzing pickle parsers and validators for security vulnerabilities
@@ -14,7 +14,7 @@ A structure-aware test case generator for Python pickle parsers and validators. 
 
 ## Overview
 
-`cisco-ai-defense-pickle-fuzzer` provides a structure-aware approach to generating pickle test cases with proper opcode sequencing, stack/memo simulation, and protocol version compliance. It produces diverse pickle bytecode that can be used with fuzzing frameworks or standalone testing to discover bugs and edge cases in pickle parsing implementations.
+`pickle-fuzzer` provides a structure-aware approach to generating pickle test cases with proper opcode sequencing, stack/memo simulation, and protocol version compliance. It produces diverse pickle bytecode that can be used with fuzzing frameworks or standalone testing to discover bugs and edge cases in pickle parsing implementations.
 
 ## Features
 
@@ -39,7 +39,7 @@ cd pickle-fuzzer
 cargo build --release
 ```
 
-The binary will be available at `target/release/cisco-ai-defense-pickle-fuzzer`.
+The binary will be available at `target/release/pickle-fuzzer`.
 
 **Build Requirements:**
 - Rust toolchain 1.70 or later
@@ -48,7 +48,7 @@ The binary will be available at `target/release/cisco-ai-defense-pickle-fuzzer`.
 ### Installing from Crates.io
 
 ```bash
-cargo install cisco-ai-defense-pickle-fuzzer
+cargo install pickle-fuzzer
 ```
 
 ## Usage
@@ -57,7 +57,7 @@ cargo install cisco-ai-defense-pickle-fuzzer
 
 ```bash
 # Generate a random pickle file
-cisco-ai-defense-pickle-fuzzer output.pkl
+pickle-fuzzer output.pkl
 
 # The protocol version is randomly selected (0-5)
 ```
@@ -66,7 +66,7 @@ cisco-ai-defense-pickle-fuzzer output.pkl
 
 ```bash
 # Generate 100 pickle files in the samples directory
-cisco-ai-defense-pickle-fuzzer --dir samples --samples 100
+pickle-fuzzer --dir samples --samples 100
 
 # Files will be named 0.pkl, 1.pkl, 2.pkl, etc.
 ```
@@ -74,21 +74,37 @@ cisco-ai-defense-pickle-fuzzer --dir samples --samples 100
 ### Command-Line Options
 
 ```
-Usage: cisco-ai-defense-pickle-fuzzer [OPTIONS] [FILE]
+Usage: pickle-fuzzer [OPTIONS] [FILE]
 
 Arguments:
   [FILE]  Output file path (for single file mode)
 
 Options:
-  -d, --dir <DIR>          Output directory for batch generation
-  -n, --samples <SAMPLES>  Number of samples to generate [default: 1000]
-  -h, --help              Print help
-  -V, --version           Print version
+  -d, --dir <DIR>                      Output directory for batch generation
+  -p, --protocol <PROTOCOL>            Pickle protocol version (0-5)
+  -s, --samples <SAMPLES>              Number of samples to generate [default: 10000]
+      --seed <SEED>                    Seed for reproducible generation
+      --min-opcodes <MIN_OPCODES>      Minimum opcodes to generate [default: 60]
+      --max-opcodes <MAX_OPCODES>      Maximum opcodes to generate [default: 300]
+      --mutators <MUTATOR>...          Enable mutators (all, bitflip, boundary, offbyone,
+                                       stringlen, character, memoindex, typeconfusion)
+      --mutation-rate <MUTATION_RATE>  Mutation probability 0.0-1.0 [default: 0.1]
+      --unsafe-mutations               Allow mutations that may produce invalid pickles
+      --allow-ext                      Allow EXT* opcodes (requires extension registry)
+      --allow-buffer                   Allow buffer opcodes (requires buffer support)
+  -h, --help                           Print help
+  -V, --version                        Print version
 ```
+
+**Special Opcodes:**
+- `--allow-ext`: Enables EXT1/EXT2/EXT4 opcodes. Only use if your unpickler has a configured extension registry, otherwise unpickling will fail.
+- `--allow-buffer`: Enables NEXT_BUFFER/READONLY_BUFFER opcodes. Only use if your unpickler has out-of-band buffer callbacks configured.
+
+By default, these opcodes are disabled to ensure generated pickles work with standard Python's `pickle` module without additional configuration.
 
 ## Python Bindings
 
-`cisco-ai-defense-pickle-fuzzer` provides Python bindings for integration with Python-based fuzzing tools like Atheris.
+`pickle-fuzzer` provides Python bindings for integration with Python-based fuzzing tools like Atheris.
 
 ### Installation
 
@@ -102,7 +118,7 @@ maturin develop --release
 ### Basic Usage
 
 ```python
-from cisco_ai_defense_pickle_fuzzer import Generator
+from pickle_fuzzer import Generator
 
 # Create generator for protocol 3
 gen = Generator(protocol=3)
@@ -125,7 +141,7 @@ Use the `PickleMutator` class for structure-aware fuzzing:
 
 ```python
 import atheris
-from cisco_ai_defense_pickle_fuzzer.fuzzer import PickleMutator
+from pickle_fuzzer.fuzzer import PickleMutator
 import pickle
 
 mutator = PickleMutator(protocol=3)
@@ -146,9 +162,9 @@ atheris.Fuzz()
 
 See [python/examples/harness.py](python/examples/harness.py) for a complete example.
 
-## Fuzzing cisco-ai-defense-pickle-fuzzer Itself
+## Fuzzing pickle-fuzzer Itself
 
-`cisco-ai-defense-pickle-fuzzer` includes comprehensive fuzz targets for testing its own generation logic using cargo-fuzz (libFuzzer).
+`pickle-fuzzer` includes comprehensive fuzz targets for testing its own generation logic using cargo-fuzz (libFuzzer).
 
 ### Quick Start
 
@@ -195,7 +211,7 @@ For detailed fuzzing documentation, see [fuzz/README.md](fuzz/README.md).
 
 ## Fuzzing Other Python Projects with Atheris
 
-`cisco-ai-defense-pickle-fuzzer` can be used to fuzz any Python project that parses pickle data.
+`pickle-fuzzer` can be used to fuzz any Python project that parses pickle data.
 
 ### Fuzzing Custom Pickle Parsers
 
@@ -203,7 +219,7 @@ For detailed fuzzing documentation, see [fuzz/README.md](fuzz/README.md).
 #!/usr/bin/env python3
 import atheris
 import sys
-from cisco_ai_defense_pickle_fuzzer.fuzzer import fuzz_pickle_parser
+from pickle_fuzzer.fuzzer import fuzz_pickle_parser
 
 # Your custom pickle parser
 def my_pickle_parser(data: bytes):
@@ -225,7 +241,7 @@ if __name__ == "__main__":
 ```python
 import atheris
 import pickle
-from cisco_ai_defense_pickle_fuzzer.fuzzer import PickleMutator
+from pickle_fuzzer.fuzzer import PickleMutator
 
 class CustomUnpickler(pickle.Unpickler):
     def find_class(self, module, name):
@@ -271,7 +287,7 @@ uv run harness.py -workers=4 -jobs=4
 
 ## How It Works
 
-`cisco-ai-defense-pickle-fuzzer` uses a stack-based approach to generate valid pickle bytecode:
+`pickle-fuzzer` uses a stack-based approach to generate valid pickle bytecode:
 
 1. **Stack/Memo Simulation**: Maintains an internal stack and memo that mirrors the pickle machine's behavior
 2. **Opcode Validation**: Only emits opcodes that are valid given the current stack state
@@ -300,7 +316,7 @@ Validated 50000 pickle file(s); 0 failure(s).
 
 ## Architecture Overview
 
-`cisco-ai-defense-pickle-fuzzer` uses a simulation-based approach to generate valid pickle bytecode:
+`pickle-fuzzer` uses a simulation-based approach to generate valid pickle bytecode:
 
 ### Core Components
 
@@ -321,28 +337,29 @@ Validated 50000 pickle file(s); 0 failure(s).
 
 ## Performance
 
-`cisco-ai-defense-pickle-fuzzer` is highly optimized for fast pickle generation with excellent scalability.
+`pickle-fuzzer` is highly optimized for fast pickle generation with excellent scalability.
 
 ### Benchmark Results
 
 | Metric | Performance |
 |--------|-------------|
-| **Small pickles** (10-30 opcodes) | ~5.3 µs |
-| **Medium pickles** (60-300 opcodes) | ~53 µs |
-| **Large pickles** (500-1000 opcodes) | ~610 µs |
-| **Single-threaded throughput** | ~8,400 pickles/sec |
-| **Multi-core (8 cores)** | ~67,000 pickles/sec |
+| **Small pickles** (10-30 opcodes) | ~5.2 µs |
+| **Medium pickles** (60-300 opcodes) | ~48 µs |
+| **Large pickles** (200-500 opcodes) | ~154 µs |
+| **XLarge pickles** (500-1000 opcodes) | ~514 µs |
+| **Single-threaded throughput** | ~10,000 pickles/sec |
+| **Multi-core (8 cores)** | ~80,000 pickles/sec |
 
 ### Protocol Performance
 
 | Protocol | Time | Use Case |
 |----------|------|----------|
-| V0 | 36 µs | ASCII-based, legacy |
-| V1 | 48 µs | **Fastest**, binary |
-| V2 | 50 µs | Fast, PROTO opcode |
-| V3 | 53 µs | **Default**, balanced |
-| V4 | 171 µs | FRAME support |
-| V5 | 161 µs | Out-of-band buffers |
+| V0 | 33 µs | **Fastest** ASCII-based, legacy |
+| V1 | 41 µs | binary |
+| V2 | 46 µs | Fast, PROTO opcode |
+| V3 | 48 µs | **Default**, balanced |
+| V4 | 139 µs | FRAME support |
+| V5 | 134 µs | Out-of-band buffers |
 
 ### Running Benchmarks
 
@@ -366,20 +383,20 @@ open target/criterion/report/index.html
 
 ```bash
 # Use seeded generation for 2x speedup
-cisco-ai-defense-pickle-fuzzer --seed 42 output.pkl
+pickle-fuzzer --seed 42 output.pkl
 
 # Use faster protocols (V1 or V2)
-cisco-ai-defense-pickle-fuzzer --protocol 1 output.pkl
+pickle-fuzzer --protocol 1 output.pkl
 
 # Smaller opcode ranges generate faster
-cisco-ai-defense-pickle-fuzzer --min-opcodes 10 --max-opcodes 50 output.pkl
+pickle-fuzzer --min-opcodes 10 --max-opcodes 50 output.pkl
 ```
 
 For detailed benchmark analysis, see [BENCHMARKS.md](BENCHMARKS.md).
 
 ## Safety Warning
 
-**Important**: `cisco-ai-defense-pickle-fuzzer` generates potentially malicious pickle data for testing purposes only. 
+**Important**: `pickle-fuzzer` generates potentially malicious pickle data for testing purposes only. 
 
 - **DO NOT** use generated pickles in production systems
 - **DO NOT** unpickle generated data without proper sandboxing
@@ -388,7 +405,7 @@ For detailed benchmark analysis, see [BENCHMARKS.md](BENCHMARKS.md).
 
 ## Development Setup
 
-For contributors and developers working on `cisco-ai-defense-pickle-fuzzer`:
+For contributors and developers working on `pickle-fuzzer`:
 
 ### Setting Up Your Environment
 
@@ -449,7 +466,7 @@ For detailed development guidelines, see [CONTRIBUTING.md](CONTRIBUTING.md).
 - [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) - Community guidelines and expectations
 
 ### Fuzzing Documentation
-- [fuzz/README.md](fuzz/README.md) - Fuzzing cisco-ai-defense-pickle-fuzzer itself with cargo-fuzz
+- [fuzz/README.md](fuzz/README.md) - Fuzzing pickle-fuzzer itself with cargo-fuzz
 
 ## Community Resources
 

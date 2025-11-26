@@ -23,9 +23,9 @@
 //! - mutator selection (via bit flags)
 //! - arbitrary data seed for generation
 //!
-//! the generated pickles are validated using Python's `pickletools.genops()` (same
-//! validation logic as scripts/validate-pickles.py) to ensure they are structurally
-//! valid and can be parsed by the reference implementation. this catches bugs in:
+//! the generated pickles are validated using Python's `pickletools.dis()`
+//!  to ensure they are structurally valid and can be parsed by the reference
+//! implementation. this catches bugs in:
 //! - opcode emission logic
 //! - stack simulation
 //! - protocol version handling
@@ -44,34 +44,37 @@
 //!   - Bit 2 (0x04): OffByOneMutator
 //!   - Bit 3 (0x08): StringLengthMutator
 //!   - Bit 4 (0x10): CharacterMutator
-//!   - Bit 5 (0x20): MemoIndexMutator (unsafe mode if bit 6 set)
+//!   - Bit 5-7: Reserved (unused)
 //! - Bytes 7+: Arbitrary data seed for generation
 //!
 //! # Validation
 //!
 //! Generated pickles must:
-//! 1. Be non-empty
-//! 2. End with STOP opcode (0x2e / '.')
-//! 3. Successfully parse with `pickletools.genops()` (via Python subprocess)
+//! 1. be non-empty
+//! 2. end with STOP opcode (0x2e / '.')
+//! 3. successfully validate with `pickletools.dis()` which checks:
+//!    - all opcodes parse correctly
+//!    - stack has exactly 1 item before STOP
+//!    - no invalid operations (via Python subprocess)
 #![no_main]
 
 use libfuzzer_sys::fuzz_target;
-use cisco_ai_defense_pickle_fuzzer::{Generator, Version};
-use cisco_ai_defense_pickle_fuzzer::mutators::{
+use pickle_fuzzer::{Generator, Version};
+use pickle_fuzzer::mutators::{
     BitFlipMutator, BoundaryMutator, OffByOneMutator,
-    StringLengthMutator, CharacterMutator, MemoIndexMutator,
+    StringLengthMutator, CharacterMutator,
 };
 use std::process::{Command, Stdio};
 use std::io::Write;
 
-/// Validate pickle using Python's pickletools.genops() (same as validate-pickles.py)
+/// validate pickle using Python's pickletools.dis() which checks stack state after STOP
 fn validate_with_python(pickle_bytes: &[u8]) -> bool {
     let mut child = match Command::new("python3")
         .arg("-c")
-        .arg("import sys, pickletools; list(pickletools.genops(sys.stdin.buffer.read()))")
+        .arg("import sys, pickletools, io; pickletools.dis(sys.stdin.buffer.read(), out=io.StringIO())")
         .stdin(Stdio::piped())
         .stdout(Stdio::null())
-        .stderr(Stdio::null())
+        .stderr(Stdio::piped())
         .spawn()
     {
         Ok(child) => child,
@@ -82,7 +85,8 @@ fn validate_with_python(pickle_bytes: &[u8]) -> bool {
         let _ = stdin.write_all(pickle_bytes);
     }
     
-    child.wait().map(|status| status.success()).unwrap_or(false)
+    let output = child.wait_with_output().unwrap();
+    output.status.success()
 }
 
 fuzz_target!(|data: &[u8]| {
@@ -136,10 +140,9 @@ fuzz_target!(|data: &[u8]| {
     if mutator_flags & 0x10 != 0 {
         gen = gen.with_mutator(Box::new(CharacterMutator));
     }
-    if mutator_flags & 0x20 != 0 {
-        let unsafe_mode = mutator_flags & 0x20 % 2 == 1;
-        gen = gen.with_mutator(Box::new(MemoIndexMutator::new(unsafe_mode)));
-    }
+    // note: MemoIndexMutator is intentionally excluded from fuzzing
+    // even in "safe" mode, it can generate invalid memo references (keys that don't exist)
+    // this fuzz target is only for validating the generator's output, so we omit it
 
     // bytes 7+: arbitrary data seed for generation
     if let Ok(pickle) = gen.generate_from_arbitrary(&data[7..]) {

@@ -111,14 +111,14 @@ jobs:
       matrix:
         include:
           - os: ubuntu-latest
-            artifact_name: cisco-ai-defense-pickle-fuzzer
-            asset_name: cisco-ai-defense-pickle-fuzzer-linux-x86_64
+            artifact_name: pickle-fuzzer
+            asset_name: pickle-fuzzer-linux-x86_64
           - os: macos-latest
-            artifact_name: cisco-ai-defense-pickle-fuzzer
-            asset_name: cisco-ai-defense-pickle-fuzzer-macos
+            artifact_name: pickle-fuzzer
+            asset_name: pickle-fuzzer-macos
           - os: windows-latest
-            artifact_name: cisco-ai-defense-pickle-fuzzer.exe
-            asset_name: cisco-ai-defense-pickle-fuzzer-windows-x86_64.exe
+            artifact_name: pickle-fuzzer.exe
+            asset_name: pickle-fuzzer-windows-x86_64.exe
     steps:
       - name: Checkout code
         uses: actions/checkout@v4

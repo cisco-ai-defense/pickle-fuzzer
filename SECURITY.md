@@ -4,7 +4,7 @@
 
 **Please do not report security vulnerabilities through public GitHub issues.**
 
-If you discover a security vulnerability in cisco-ai-defense-pickle-fuzzer, please report it to:
+If you discover a security vulnerability in pickle-fuzzer, please report it to:
 
 **Email**: security@cisco.com
 
@@ -46,7 +46,7 @@ We recommend always using the latest version for the most up-to-date security fi
 
 ### Tool Purpose
 
-cisco-ai-defense-pickle-fuzzer is a **security testing tool** that generates pickle bytecode for fuzzing and testing purposes. By design, it creates potentially malicious pickle data.
+pickle-fuzzer is a **security testing tool** that generates pickle bytecode for fuzzing and testing purposes. By design, it creates potentially malicious pickle data.
 
 ### Safe Usage Guidelines
 
@@ -64,7 +64,7 @@ cisco-ai-defense-pickle-fuzzer is a **security testing tool** that generates pic
 
 ## Responsible Disclosure
 
-If you discover vulnerabilities in other projects using cisco-ai-defense-pickle-fuzzer:
+If you discover vulnerabilities in other projects using pickle-fuzzer:
 
 1. Report to the affected project's security team first
 2. Allow reasonable time for fixes (typically 90 days)
@@ -73,7 +73,7 @@ If you discover vulnerabilities in other projects using cisco-ai-defense-pickle-
 
 ## Security Best Practices
 
-When using cisco-ai-defense-pickle-fuzzer for security research:
+When using pickle-fuzzer for security research:
 
 - **Isolate**: Run in containers or VMs
 - **Monitor**: Watch for resource exhaustion
@@ -91,4 +91,4 @@ For general questions, use [GitHub Issues](https://github.com/cisco-ai-defense/p
 
 ---
 
-Thank you for helping keep cisco-ai-defense-pickle-fuzzer and its users safe!
+Thank you for helping keep pickle-fuzzer and its users safe!

@@ -14,18 +14,18 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-import cisco_ai_defense_pickle_fuzzer
+import pickle_fuzzer
 
 
 def test_basic_generation():
-    gen = cisco_ai_defense_pickle_fuzzer.Generator(protocol=3)
+    gen = pickle_fuzzer.Generator(protocol=3)
     data = gen.generate()
     assert len(data) > 0
     assert data[-1] == ord(".")
 
 def test_deterministic_generation():
-    gen1 = cisco_ai_defense_pickle_fuzzer.Generator(protocol=3, seed=42)
-    gen2 = cisco_ai_defense_pickle_fuzzer.Generator(protocol=3, seed=42)
+    gen1 = pickle_fuzzer.Generator(protocol=3, seed=42)
+    gen2 = pickle_fuzzer.Generator(protocol=3, seed=42)
 
     data1 = gen1.generate()
     data2 = gen2.generate()
@@ -33,7 +33,7 @@ def test_deterministic_generation():
     assert data1 == data2
 
 def test_generate_from_bytes():
-    gen = cisco_ai_defense_pickle_fuzzer.Generator(protocol=3)
+    gen = pickle_fuzzer.Generator(protocol=3)
     fuzzer_input = b"test_fuzzer_input_bytes"
 
     data1 = gen.generate_from_bytes(fuzzer_input)

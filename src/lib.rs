@@ -16,7 +16,7 @@
 
 //! A structure-aware test case generator for Python pickle parsers and validators.
 //!
-//! `cisco-ai-defense-pickle-fuzzer` generates complex, valid pickle bytecode across all protocol versions (0-5)
+//! `pickle-fuzzer` generates complex, valid pickle bytecode across all protocol versions (0-5)
 //! for use in fuzzing and testing pickle parsing implementations. It uses a stack-based
 //! approach with proper opcode sequencing, stack/memo simulation, and protocol version
 //! compliance to produce diverse test cases.
@@ -24,7 +24,7 @@
 //! # Examples
 //!
 //! ```no_run
-//! use cisco_ai_defense_pickle_fuzzer::{Generator, Version};
+//! use pickle_fuzzer::{Generator, Version};
 //!
 //! // Generate a single pickle file
 //! let mut generator = Generator::new(Version::V4);

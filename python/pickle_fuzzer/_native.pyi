@@ -13,29 +13,11 @@
 # limitations under the License.
 #
 # SPDX-License-Identifier: Apache-2.0
+from typing import Optional
 
-[project]
-name = "cisco-ai-defense-pickle-fuzzer"
-version = "0.1.0"
-description = "Structure-aware pickle generator for fuzzing"
-readme = "README.md"
-requires-python = "==3.11.14"
-dependencies = [
-    "atheris>=2.3.0",
-]
-
-[build-system]
-requires = ["maturin>=1.0,<2.0"]
-build-backend = "maturin"
-
-[tool.maturin]
-features = ["python-bindings"]
-python-source = "python"
-module-name = "pickle_fuzzer._native"
-
-[dependency-groups]
-dev = [
-    "maturin>=1.0,<2.0",
-    "pytest>=9.0.1",
-]
-
+class Generator:
+    def __init__(self, protocol: int = 3, seed: Optional[int] = None) -> None: ...
+    def generate(self) -> bytes: ...
+    def generate_from_bytes(self, data: bytes) -> bytes: ...
+    def set_opcode_range(self, min: int, max: int) -> None: ...
+    def reset(self) -> None: ...

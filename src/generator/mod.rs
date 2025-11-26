@@ -72,7 +72,7 @@ use super::state::State;
 /// # Examples
 ///
 /// ```no_run
-/// use cisco_ai_defense_pickle_fuzzer::{Generator, Version};
+/// use pickle_fuzzer::{Generator, Version};
 ///
 /// // basic generation with random seed
 /// let mut gen = Generator::new(Version::V4);
@@ -117,6 +117,12 @@ pub struct Generator {
 
     /// allow unsafe mutations that may violate pickle validity
     pub unsafe_mutations: bool,
+
+    /// allow EXT* opcodes (requires configured extension registry)
+    pub allow_ext_opcodes: bool,
+
+    /// allow NEXT_BUFFER/READONLY_BUFFER opcodes (requires out-of-band buffers)
+    pub allow_buffer_opcodes: bool,
 }
 
 impl Default for Generator {
@@ -131,6 +137,8 @@ impl Default for Generator {
             mutators: Vec::new(),
             mutation_rate: 0.1,
             unsafe_mutations: false,
+            allow_ext_opcodes: false,
+            allow_buffer_opcodes: false,
         }
     }
 }
@@ -141,7 +149,7 @@ impl Generator {
     /// # Examples
     ///
     /// ```no_run
-    /// use cisco_ai_defense_pickle_fuzzer::{Generator, Version};
+    /// use pickle_fuzzer::{Generator, Version};
     ///
     /// let gen = Generator::new(Version::V3);
     /// ```
@@ -160,7 +168,7 @@ impl Generator {
     /// # Examples
     ///
     /// ```no_run
-    /// use cisco_ai_defense_pickle_fuzzer::{Generator, Version};
+    /// use pickle_fuzzer::{Generator, Version};
     ///
     /// let mut gen = Generator::new(Version::V3);
     /// let pickle1 = gen.generate().unwrap();
@@ -204,7 +212,7 @@ impl Generator {
     /// # Examples
     ///
     /// ```no_run
-    /// use cisco_ai_defense_pickle_fuzzer::{Generator, Version};
+    /// use pickle_fuzzer::{Generator, Version};
     ///
     /// let gen = Generator::new(Version::V3)
     ///     .with_opcode_range(10, 50);
@@ -249,6 +257,26 @@ impl Generator {
         self
     }
 
+    /// allow EXT* opcodes during generation.
+    ///
+    /// EXT opcodes require a configured extension registry. enable this only
+    /// if you have properly configured the extension registry in your unpickler.
+    /// without proper configuration, pickles with EXT opcodes will fail to unpickle.
+    pub fn with_ext_opcodes(mut self, allow: bool) -> Self {
+        self.allow_ext_opcodes = allow;
+        self
+    }
+
+    /// allow NEXT_BUFFER/READONLY_BUFFER opcodes during generation.
+    ///
+    /// buffer opcodes require out-of-band buffer support. enable this only
+    /// if you have properly configured buffer callbacks in your unpickler.
+    /// without proper configuration, pickles with buffer opcodes will fail to unpickle.
+    pub fn with_buffer_opcodes(mut self, allow: bool) -> Self {
+        self.allow_buffer_opcodes = allow;
+        self
+    }
+
     /// generate a random, but valid pickle opcode stream using PRNG.
     ///
     /// uses `rand` for entropy source. suitable for CLI and standalone use.
@@ -275,7 +303,7 @@ impl Generator {
     /// # Examples
     ///
     /// ```no_run
-    /// use cisco_ai_defense_pickle_fuzzer::{Generator, Version};
+    /// use pickle_fuzzer::{Generator, Version};
     ///
     /// let fuzzer_input = b"fuzzer_bytes_here";
     /// let mut gen = Generator::new(Version::V3);

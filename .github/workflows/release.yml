@@ -35,24 +35,24 @@ jobs:
         include:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
-            artifact_name: cisco-ai-defense-pickle-fuzzer
-            asset_name: cisco-ai-defense-pickle-fuzzer-linux-x86_64
+            artifact_name: pickle-fuzzer
+            asset_name: pickle-fuzzer-linux-x86_64
           - os: ubuntu-latest
             target: x86_64-unknown-linux-musl
-            artifact_name: cisco-ai-defense-pickle-fuzzer
-            asset_name: cisco-ai-defense-pickle-fuzzer-linux-x86_64-musl
+            artifact_name: pickle-fuzzer
+            asset_name: pickle-fuzzer-linux-x86_64-musl
           - os: macos-latest
             target: x86_64-apple-darwin
-            artifact_name: cisco-ai-defense-pickle-fuzzer
-            asset_name: cisco-ai-defense-pickle-fuzzer-macos-x86_64
+            artifact_name: pickle-fuzzer
+            asset_name: pickle-fuzzer-macos-x86_64
           - os: macos-latest
             target: aarch64-apple-darwin
-            artifact_name: cisco-ai-defense-pickle-fuzzer
-            asset_name: cisco-ai-defense-pickle-fuzzer-macos-aarch64
+            artifact_name: pickle-fuzzer
+            asset_name: pickle-fuzzer-macos-aarch64
           - os: windows-latest
             target: x86_64-pc-windows-msvc
-            artifact_name: cisco-ai-defense-pickle-fuzzer.exe
-            asset_name: cisco-ai-defense-pickle-fuzzer-windows-x86_64.exe
+            artifact_name: pickle-fuzzer.exe
+            asset_name: pickle-fuzzer-windows-x86_64.exe
 
     steps:
       - name: Checkout code

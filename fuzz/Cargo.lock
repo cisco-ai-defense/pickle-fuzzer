@@ -110,28 +110,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9330f8b2ff13f34540b44e946ef35111825727b38d33286ef986142615121801"
 
 [[package]]
-name = "cisco-ai-defense-pickle-fuzzer"
-version = "0.1.0"
-dependencies = [
- "arbitrary",
- "clap",
- "color-eyre",
- "phf",
- "rand",
- "rand_chacha",
- "rayon",
- "serde",
-]
-
-[[package]]
-name = "cisco-ai-defense-pickle-fuzzer-fuzz"
-version = "0.0.0"
-dependencies = [
- "cisco-ai-defense-pickle-fuzzer",
- "libfuzzer-sys",
-]
-
-[[package]]
 name = "clap"
 version = "4.5.51"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -419,6 +397,28 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e57fef6bc5981e38c2ce2d63bfa546861309f875b8a75f092d1d54ae2d64f266"
 dependencies = [
  "siphasher",
+]
+
+[[package]]
+name = "pickle-fuzzer"
+version = "0.1.0"
+dependencies = [
+ "arbitrary",
+ "clap",
+ "color-eyre",
+ "phf",
+ "rand",
+ "rand_chacha",
+ "rayon",
+ "serde",
+]
+
+[[package]]
+name = "pickle-fuzzer-fuzz"
+version = "0.0.0"
+dependencies = [
+ "libfuzzer-sys",
+ "pickle-fuzzer",
 ]
 
 [[package]]

@@ -14,9 +14,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use cisco_ai_defense_pickle_fuzzer::{Cli, Generator, Version};
 use clap::Parser;
 use color_eyre::Result;
+use pickle_fuzzer::{Cli, Generator, Version};
 use rand::Rng;
 use rayon::prelude::*;
 
@@ -26,18 +26,16 @@ fn main() -> Result<()> {
     let args = Cli::parse();
 
     // Expand "all" meta-option and create mutators
-    let mutator_kinds: Vec<cisco_ai_defense_pickle_fuzzer::MutatorKind> = if args
-        .mutators
-        .contains(&cisco_ai_defense_pickle_fuzzer::MutatorKind::All)
-    {
-        // If "all" is specified, use all mutators
-        cisco_ai_defense_pickle_fuzzer::MutatorKind::all_mutators()
-    } else {
-        // Otherwise use the specified mutators
-        args.mutators.clone()
-    };
+    let mutator_kinds: Vec<pickle_fuzzer::MutatorKind> =
+        if args.mutators.contains(&pickle_fuzzer::MutatorKind::All) {
+            // if "all" is specified, use all mutators (excluding MemoIndex unless --unsafe-mutations)
+            pickle_fuzzer::MutatorKind::all_mutators(args.unsafe_mutations)
+        } else {
+            // otherwise use the specified mutators
+            args.mutators.clone()
+        };
 
-    let mutators: Vec<Box<dyn cisco_ai_defense_pickle_fuzzer::Mutator>> = mutator_kinds
+    let mutators: Vec<Box<dyn pickle_fuzzer::Mutator>> = mutator_kinds
         .iter()
         .map(|kind| kind.create(args.unsafe_mutations))
         .collect();
@@ -69,6 +67,11 @@ fn main() -> Result<()> {
                 .with_unsafe_mutations(args.unsafe_mutations);
         }
 
+        // apply EXT and buffer opcode flags
+        generator = generator
+            .with_ext_opcodes(args.allow_ext)
+            .with_buffer_opcodes(args.allow_buffer);
+
         let bytecode = generator.generate()?;
         std::fs::write(&file, &bytecode)?;
         println!("Generated {} bytes to {:?}", bytecode.len(), file);
@@ -84,6 +87,8 @@ fn main() -> Result<()> {
         let max_opcodes = args.max_opcodes;
         let mutation_rate = args.mutation_rate;
         let unsafe_mutations = args.unsafe_mutations;
+        let allow_ext_opcodes = args.allow_ext;
+        let allow_buffer_opcodes = args.allow_buffer;
         let mutator_kinds_for_batch = mutator_kinds.clone();
 
         let errors: Vec<_> = (0..args.samples)
@@ -107,7 +112,7 @@ fn main() -> Result<()> {
 
                 // Create mutators for this thread
                 if !mutator_kinds_for_batch.is_empty() {
-                    let thread_mutators: Vec<Box<dyn cisco_ai_defense_pickle_fuzzer::Mutator>> =
+                    let thread_mutators: Vec<Box<dyn pickle_fuzzer::Mutator>> =
                         mutator_kinds_for_batch
                             .iter()
                             .map(|kind| kind.create(unsafe_mutations))
@@ -117,6 +122,11 @@ fn main() -> Result<()> {
                         .with_mutation_rate(mutation_rate)
                         .with_unsafe_mutations(unsafe_mutations);
                 }
+
+                // apply EXT and buffer opcode flags
+                generator = generator
+                    .with_ext_opcodes(allow_ext_opcodes)
+                    .with_buffer_opcodes(allow_buffer_opcodes);
 
                 let bytecode = match generator.generate() {
                     Ok(b) => b,

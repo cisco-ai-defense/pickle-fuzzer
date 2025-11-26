@@ -87,17 +87,26 @@ pub enum MutatorKind {
 }
 
 impl MutatorKind {
-    /// Returns all individual mutator kinds (excluding the "All" meta-option).
-    pub fn all_mutators() -> Vec<MutatorKind> {
-        vec![
+    /// returns all individual mutator kinds (excluding the "all" meta-option).
+    ///
+    /// if `unsafe_mutations` is false, excludes MemoIndex mutator since it can
+    /// generate invalid memo references even in safe mode.
+    pub fn all_mutators(unsafe_mutations: bool) -> Vec<MutatorKind> {
+        let mut mutators = vec![
             MutatorKind::Bitflip,
             MutatorKind::Boundary,
             MutatorKind::Offbyone,
             MutatorKind::Stringlen,
             MutatorKind::Character,
-            MutatorKind::Memoindex,
             MutatorKind::Typeconfusion,
-        ]
+        ];
+
+        // only include MemoIndex when explicitly using unsafe mutations
+        if unsafe_mutations {
+            mutators.push(MutatorKind::Memoindex);
+        }
+
+        mutators
     }
 
     /// Create a boxed mutator instance from this kind.
