@@ -73,7 +73,7 @@ pickle-fuzzer/
 ├── benches/                # Performance benchmarks
 ├── fuzz/                   # Fuzzing targets (cargo-fuzz)
 └── python/                 # Python package
-    ├── cisco_ai_defense_pickle_fuzzer/
+    ├── pickle_fuzzer/
     │   ├── __init__.py     # Python module entry point
     │   └── fuzzer.py       # Atheris integration
     ├── examples/           # Python usage examples
@@ -110,7 +110,7 @@ mod tests {
 Add integration tests in `tests/` directory:
 
 ```rust
-use cisco_ai_defense_pickle_fuzzer::{Generator, Version};
+use pickle_fuzzer::{Generator, Version};
 
 #[test]
 fn test_integration_scenario() {
