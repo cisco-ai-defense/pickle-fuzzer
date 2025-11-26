@@ -80,7 +80,7 @@ mod tests {
         let mutator = MemoIndexMutator::new(false);
         let mut rng = ChaCha8Rng::seed_from_u64(42);
         let mut source = GenerationSource::Rand(&mut rng);
-        
+
         let index = 10;
         for _ in 0..20 {
             if let Some(result) = mutator.mutate_memo_index(index, &mut source, 1.0) {
@@ -95,10 +95,10 @@ mod tests {
         let mutator = MemoIndexMutator::new(true);
         let mut rng = ChaCha8Rng::seed_from_u64(42);
         let mut source = GenerationSource::Rand(&mut rng);
-        
+
         let index = 10;
         let mut found_far_value = false;
-        
+
         for _ in 0..20 {
             if let Some(result) = mutator.mutate_memo_index(index, &mut source, 1.0) {
                 // unsafe mode: can be any value 0-999
@@ -108,8 +108,11 @@ mod tests {
                 }
             }
         }
-        
-        assert!(found_far_value, "unsafe mode should produce values far from original");
+
+        assert!(
+            found_far_value,
+            "unsafe mode should produce values far from original"
+        );
     }
 
     #[test]
@@ -117,7 +120,7 @@ mod tests {
         let mutator = MemoIndexMutator::new(false);
         let mut rng = ChaCha8Rng::seed_from_u64(42);
         let mut source = GenerationSource::Rand(&mut rng);
-        
+
         assert!(mutator.mutate_memo_index(5, &mut source, 0.0).is_none());
     }
 
@@ -125,7 +128,7 @@ mod tests {
     fn test_memoindex_is_unsafe() {
         let safe_mutator = MemoIndexMutator::new(false);
         let unsafe_mutator = MemoIndexMutator::new(true);
-        
+
         assert!(!safe_mutator.is_unsafe());
         assert!(unsafe_mutator.is_unsafe());
     }

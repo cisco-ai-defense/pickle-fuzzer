@@ -140,7 +140,7 @@ mod tests {
     #[test]
     fn test_cli_mode_detection() {
         use std::path::PathBuf;
-        
+
         let cli_single = Cli {
             file: Some(PathBuf::from("test.pkl")),
             dir: None,
@@ -155,10 +155,10 @@ mod tests {
             allow_ext: false,
             allow_buffer: false,
         };
-        
+
         assert!(cli_single.is_single_file_mode());
         assert!(!cli_single.is_batch_mode());
-        
+
         let cli_batch = Cli {
             file: None,
             dir: Some(PathBuf::from("output")),
@@ -173,7 +173,7 @@ mod tests {
             allow_ext: false,
             allow_buffer: false,
         };
-        
+
         assert!(!cli_batch.is_single_file_mode());
         assert!(cli_batch.is_batch_mode());
     }

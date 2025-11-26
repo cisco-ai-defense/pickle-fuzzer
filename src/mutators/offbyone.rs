@@ -83,7 +83,7 @@ mod tests {
         let mutator = OffByOneMutator;
         let mut rng = ChaCha8Rng::seed_from_u64(42);
         let mut source = GenerationSource::Rand(&mut rng);
-        
+
         let value = 100;
         for _ in 0..10 {
             if let Some(result) = mutator.mutate_int(value, &mut source, 1.0) {
@@ -97,7 +97,7 @@ mod tests {
         let mutator = OffByOneMutator;
         let mut rng = ChaCha8Rng::seed_from_u64(42);
         let mut source = GenerationSource::Rand(&mut rng);
-        
+
         // test wrapping at MAX
         if let Some(result) = mutator.mutate_int(i32::MAX, &mut source, 1.0) {
             assert!(result == i32::MIN || result == i32::MAX - 1);
@@ -109,7 +109,7 @@ mod tests {
         let mutator = OffByOneMutator;
         let mut rng = ChaCha8Rng::seed_from_u64(42);
         let mut source = GenerationSource::Rand(&mut rng);
-        
+
         let value = 1000_i64;
         for _ in 0..10 {
             if let Some(result) = mutator.mutate_long(value, &mut source, 1.0) {
@@ -123,7 +123,7 @@ mod tests {
         let mutator = OffByOneMutator;
         let mut rng = ChaCha8Rng::seed_from_u64(42);
         let mut source = GenerationSource::Rand(&mut rng);
-        
+
         let index = 5;
         for _ in 0..10 {
             if let Some(result) = mutator.mutate_memo_index(index, &mut source, 1.0) {
@@ -137,7 +137,7 @@ mod tests {
         let mutator = OffByOneMutator;
         let mut rng = ChaCha8Rng::seed_from_u64(42);
         let mut source = GenerationSource::Rand(&mut rng);
-        
+
         // at index 0, subtracting should saturate to 0
         for _ in 0..10 {
             if let Some(result) = mutator.mutate_memo_index(0, &mut source, 1.0) {
@@ -151,7 +151,7 @@ mod tests {
         let mutator = OffByOneMutator;
         let mut rng = ChaCha8Rng::seed_from_u64(42);
         let mut source = GenerationSource::Rand(&mut rng);
-        
+
         assert!(mutator.mutate_int(100, &mut source, 0.0).is_none());
         assert!(mutator.mutate_long(100, &mut source, 0.0).is_none());
         assert!(mutator.mutate_memo_index(5, &mut source, 0.0).is_none());

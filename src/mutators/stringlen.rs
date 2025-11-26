@@ -119,11 +119,11 @@ mod tests {
         let mutator = StringLengthMutator;
         let mut rng = ChaCha8Rng::seed_from_u64(42);
         let mut source = GenerationSource::Rand(&mut rng);
-        
+
         let original = "hello".to_string();
         let mut found_shorter = false;
         let mut found_longer = false;
-        
+
         for _ in 0..30 {
             if let Some(result) = mutator.mutate_string(original.clone(), &mut source, 1.0) {
                 if result.len() < original.len() {
@@ -134,7 +134,7 @@ mod tests {
                 }
             }
         }
-        
+
         assert!(found_shorter || found_longer, "should change length");
     }
 
@@ -143,7 +143,7 @@ mod tests {
         let mutator = StringLengthMutator;
         let mut rng = ChaCha8Rng::seed_from_u64(42);
         let mut source = GenerationSource::Rand(&mut rng);
-        
+
         // empty string can only be extended or doubled (stays empty)
         for _ in 0..10 {
             if let Some(result) = mutator.mutate_string(String::new(), &mut source, 1.0) {
@@ -158,11 +158,11 @@ mod tests {
         let mutator = StringLengthMutator;
         let mut rng = ChaCha8Rng::seed_from_u64(42);
         let mut source = GenerationSource::Rand(&mut rng);
-        
+
         let original = vec![1, 2, 3, 4, 5];
         let mut found_shorter = false;
         let mut found_longer = false;
-        
+
         for _ in 0..30 {
             if let Some(result) = mutator.mutate_bytes(original.clone(), &mut source, 1.0) {
                 if result.len() < original.len() {
@@ -173,7 +173,7 @@ mod tests {
                 }
             }
         }
-        
+
         assert!(found_shorter || found_longer, "should change length");
     }
 
@@ -182,7 +182,7 @@ mod tests {
         let mutator = StringLengthMutator;
         let mut rng = ChaCha8Rng::seed_from_u64(42);
         let mut source = GenerationSource::Rand(&mut rng);
-        
+
         // empty bytes can only be extended or doubled (stays empty)
         for _ in 0..10 {
             if let Some(result) = mutator.mutate_bytes(vec![], &mut source, 1.0) {
@@ -196,8 +196,12 @@ mod tests {
         let mutator = StringLengthMutator;
         let mut rng = ChaCha8Rng::seed_from_u64(42);
         let mut source = GenerationSource::Rand(&mut rng);
-        
-        assert!(mutator.mutate_string("test".to_string(), &mut source, 0.0).is_none());
-        assert!(mutator.mutate_bytes(vec![1, 2, 3], &mut source, 0.0).is_none());
+
+        assert!(mutator
+            .mutate_string("test".to_string(), &mut source, 0.0)
+            .is_none());
+        assert!(mutator
+            .mutate_bytes(vec![1, 2, 3], &mut source, 0.0)
+            .is_none());
     }
 }

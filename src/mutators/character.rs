@@ -80,10 +80,10 @@ mod tests {
         let mutator = CharacterMutator;
         let mut rng = ChaCha8Rng::seed_from_u64(42);
         let mut source = GenerationSource::Rand(&mut rng);
-        
+
         let original = "hello".to_string();
         let result = mutator.mutate_string(original.clone(), &mut source, 1.0);
-        
+
         assert!(result.is_some());
         let mutated = result.unwrap();
         assert_eq!(mutated.len(), original.len());
@@ -95,7 +95,7 @@ mod tests {
         let mutator = CharacterMutator;
         let mut rng = ChaCha8Rng::seed_from_u64(42);
         let mut source = GenerationSource::Rand(&mut rng);
-        
+
         let result = mutator.mutate_string(String::new(), &mut source, 1.0);
         assert!(result.is_none());
     }
@@ -105,10 +105,10 @@ mod tests {
         let mutator = CharacterMutator;
         let mut rng = ChaCha8Rng::seed_from_u64(42);
         let mut source = GenerationSource::Rand(&mut rng);
-        
+
         let original = vec![1, 2, 3, 4, 5];
         let result = mutator.mutate_bytes(original.clone(), &mut source, 1.0);
-        
+
         assert!(result.is_some());
         let mutated = result.unwrap();
         assert_eq!(mutated.len(), original.len());
@@ -120,7 +120,7 @@ mod tests {
         let mutator = CharacterMutator;
         let mut rng = ChaCha8Rng::seed_from_u64(42);
         let mut source = GenerationSource::Rand(&mut rng);
-        
+
         let result = mutator.mutate_bytes(vec![], &mut source, 1.0);
         assert!(result.is_none());
     }
@@ -130,8 +130,12 @@ mod tests {
         let mutator = CharacterMutator;
         let mut rng = ChaCha8Rng::seed_from_u64(42);
         let mut source = GenerationSource::Rand(&mut rng);
-        
-        assert!(mutator.mutate_string("test".to_string(), &mut source, 0.0).is_none());
-        assert!(mutator.mutate_bytes(vec![1, 2, 3], &mut source, 0.0).is_none());
+
+        assert!(mutator
+            .mutate_string("test".to_string(), &mut source, 0.0)
+            .is_none());
+        assert!(mutator
+            .mutate_bytes(vec![1, 2, 3], &mut source, 0.0)
+            .is_none());
     }
 }

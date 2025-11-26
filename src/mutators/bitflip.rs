@@ -61,14 +61,14 @@ mod tests {
         let mutator = BitFlipMutator;
         let mut rng = ChaCha8Rng::seed_from_u64(42);
         let mut source = GenerationSource::Rand(&mut rng);
-        
+
         let original = 0b1010_1010;
         let result = mutator.mutate_int(original, &mut source, 1.0);
-        
+
         assert!(result.is_some());
         let mutated = result.unwrap();
         assert_ne!(mutated, original);
-        
+
         // verify exactly one bit flipped
         let diff = original ^ mutated;
         assert_eq!(diff.count_ones(), 1);
@@ -79,7 +79,7 @@ mod tests {
         let mutator = BitFlipMutator;
         let mut rng = ChaCha8Rng::seed_from_u64(42);
         let mut source = GenerationSource::Rand(&mut rng);
-        
+
         let result = mutator.mutate_int(100, &mut source, 0.0);
         assert!(result.is_none());
     }
@@ -89,14 +89,14 @@ mod tests {
         let mutator = BitFlipMutator;
         let mut rng = ChaCha8Rng::seed_from_u64(42);
         let mut source = GenerationSource::Rand(&mut rng);
-        
+
         let original = 0x1234_5678_9ABC_DEF0_i64;
         let result = mutator.mutate_long(original, &mut source, 1.0);
-        
+
         assert!(result.is_some());
         let mutated = result.unwrap();
         assert_ne!(mutated, original);
-        
+
         // verify exactly one bit flipped
         let diff = original ^ mutated;
         assert_eq!(diff.count_ones(), 1);
@@ -107,7 +107,7 @@ mod tests {
         let mutator = BitFlipMutator;
         let mut rng = ChaCha8Rng::seed_from_u64(42);
         let mut source = GenerationSource::Rand(&mut rng);
-        
+
         let result = mutator.mutate_long(1000, &mut source, 0.0);
         assert!(result.is_none());
     }
@@ -117,10 +117,10 @@ mod tests {
         let mutator = BitFlipMutator;
         let mut rng = ChaCha8Rng::seed_from_u64(42);
         let mut source = GenerationSource::Rand(&mut rng);
-        
+
         let result = mutator.mutate_int(0, &mut source, 1.0);
         assert!(result.is_some());
-        
+
         // flipping any bit in 0 gives a power of 2
         let mutated = result.unwrap();
         assert_ne!(mutated, 0);
@@ -132,17 +132,17 @@ mod tests {
         let mutator = BitFlipMutator;
         let mut rng = ChaCha8Rng::seed_from_u64(42);
         let mut source = GenerationSource::Rand(&mut rng);
-        
+
         let value = 0xFF00;
         let mut results = std::collections::HashSet::new();
-        
+
         // collect multiple mutations
         for _ in 0..20 {
             if let Some(mutated) = mutator.mutate_int(value, &mut source, 1.0) {
                 results.insert(mutated);
             }
         }
-        
+
         // should produce multiple different results
         assert!(results.len() > 1);
     }

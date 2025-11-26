@@ -78,9 +78,9 @@ mod tests {
         let mutator = BoundaryMutator;
         let mut rng = ChaCha8Rng::seed_from_u64(42);
         let mut source = GenerationSource::Rand(&mut rng);
-        
+
         let boundaries = [0, -1, 1, i32::MAX, i32::MIN];
-        
+
         for _ in 0..20 {
             if let Some(result) = mutator.mutate_int(100, &mut source, 1.0) {
                 assert!(boundaries.contains(&result));
@@ -93,7 +93,7 @@ mod tests {
         let mutator = BoundaryMutator;
         let mut rng = ChaCha8Rng::seed_from_u64(42);
         let mut source = GenerationSource::Rand(&mut rng);
-        
+
         let result = mutator.mutate_int(100, &mut source, 0.0);
         assert!(result.is_none());
     }
@@ -103,9 +103,9 @@ mod tests {
         let mutator = BoundaryMutator;
         let mut rng = ChaCha8Rng::seed_from_u64(42);
         let mut source = GenerationSource::Rand(&mut rng);
-        
+
         let boundaries = [0, -1, 1, i64::MAX, i64::MIN];
-        
+
         for _ in 0..20 {
             if let Some(result) = mutator.mutate_long(1000, &mut source, 1.0) {
                 assert!(boundaries.contains(&result));
@@ -118,14 +118,18 @@ mod tests {
         let mutator = BoundaryMutator;
         let mut rng = ChaCha8Rng::seed_from_u64(42);
         let mut source = GenerationSource::Rand(&mut rng);
-        
+
         for _ in 0..20 {
             if let Some(result) = mutator.mutate_float(1.5, &mut source, 1.0) {
                 // check it's one of the expected boundary values
                 assert!(
-                    result == 0.0 || result == -1.0 || result == 1.0 ||
-                    result == f64::MAX || result == f64::MIN ||
-                    result.is_infinite() || result.is_nan()
+                    result == 0.0
+                        || result == -1.0
+                        || result == 1.0
+                        || result == f64::MAX
+                        || result == f64::MIN
+                        || result.is_infinite()
+                        || result.is_nan()
                 );
             }
         }
