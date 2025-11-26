@@ -504,4 +504,3 @@ Distributed under the Apache 2.0 License. See [LICENSE](LICENSE) for more inform
 
 Project Link: [https://github.com/cisco-ai-defense/pickle-fuzzer](https://github.com/cisco-ai-defense/pickle-fuzzer)
 
-
