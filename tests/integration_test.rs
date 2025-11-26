@@ -148,7 +148,7 @@ fn test_cli_single_file_generation() {
     let _ = fs::remove_file(temp_file);
 
     let output = Command::new("cargo")
-        .args(&["run", "--quiet", "--", temp_file])
+        .args(["run", "--quiet", "--", temp_file])
         .output()
         .expect("failed to execute command");
 
@@ -176,7 +176,7 @@ fn test_cli_with_protocol_flag() {
     let _ = fs::remove_file(temp_file);
 
     let output = Command::new("cargo")
-        .args(&["run", "--quiet", "--", "--protocol", "4", temp_file])
+        .args(["run", "--quiet", "--", "--protocol", "4", temp_file])
         .output()
         .expect("failed to execute command");
 
@@ -202,12 +202,12 @@ fn test_cli_with_seed_produces_deterministic_output() {
 
     // generate with same seed twice
     Command::new("cargo")
-        .args(&["run", "--quiet", "--", "--seed", "42", temp_file1])
+        .args(["run", "--quiet", "--", "--seed", "42", temp_file1])
         .output()
         .expect("failed to execute command");
 
     Command::new("cargo")
-        .args(&["run", "--quiet", "--", "--seed", "42", temp_file2])
+        .args(["run", "--quiet", "--", "--seed", "42", temp_file2])
         .output()
         .expect("failed to execute command");
 
@@ -233,7 +233,7 @@ fn test_cli_batch_mode() {
     fs::create_dir_all(temp_dir).expect("failed to create temp dir");
 
     let output = Command::new("cargo")
-        .args(&["run", "--quiet", "--", "--dir", temp_dir, "--samples", "5"])
+        .args(["run", "--quiet", "--", "--dir", temp_dir, "--samples", "5"])
         .output()
         .expect("failed to execute command");
 
@@ -266,7 +266,7 @@ fn test_cli_with_opcode_range() {
     let _ = fs::remove_file(temp_file);
 
     let output = Command::new("cargo")
-        .args(&[
+        .args([
             "run",
             "--quiet",
             "--",
@@ -294,7 +294,7 @@ fn test_cli_with_mutators() {
     let _ = fs::remove_file(temp_file);
 
     let output = Command::new("cargo")
-        .args(&[
+        .args([
             "run",
             "--quiet",
             "--",
