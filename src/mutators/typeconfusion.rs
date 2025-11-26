@@ -222,3 +222,130 @@ impl Mutator for TypeConfusionMutator {
         false
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::generator::GenerationSource;
+    use rand::SeedableRng;
+    use rand_chacha::ChaCha8Rng;
+
+    #[test]
+    fn test_typeconfusion_name() {
+        let mutator = TypeConfusionMutator::new(true);
+        assert_eq!(mutator.name(), "typeconfusion");
+    }
+
+    #[test]
+    fn test_typeconfusion_is_always_unsafe() {
+        let mutator = TypeConfusionMutator::new(true);
+        assert!(mutator.is_unsafe());
+        
+        let mutator_false = TypeConfusionMutator::new(false);
+        assert!(mutator_false.is_unsafe());
+    }
+
+    #[test]
+    fn test_typeconfusion_opcode_to_type() {
+        assert_eq!(TypeConfusionMutator::opcode_to_type(0x4a), Some(StackType::Int)); // BinInt
+        assert_eq!(TypeConfusionMutator::opcode_to_type(0x47), Some(StackType::Float)); // BinFloat
+        assert_eq!(TypeConfusionMutator::opcode_to_type(0x8c), Some(StackType::String)); // ShortBinUnicode
+        assert_eq!(TypeConfusionMutator::opcode_to_type(0x43), Some(StackType::Bytes)); // ShortBinBytes
+        assert_eq!(TypeConfusionMutator::opcode_to_type(0x5d), Some(StackType::List)); // EmptyList
+        assert_eq!(TypeConfusionMutator::opcode_to_type(0x7d), Some(StackType::Dict)); // EmptyDict
+        assert_eq!(TypeConfusionMutator::opcode_to_type(0x29), Some(StackType::Tuple)); // EmptyTuple
+        assert_eq!(TypeConfusionMutator::opcode_to_type(0x4e), Some(StackType::None)); // None
+        assert_eq!(TypeConfusionMutator::opcode_to_type(0x88), Some(StackType::Bool)); // NewTrue
+        assert_eq!(TypeConfusionMutator::opcode_to_type(0xFF), None); // Invalid opcode
+    }
+
+    #[test]
+    fn test_typeconfusion_choose_wrong_type() {
+        let mut rng = ChaCha8Rng::seed_from_u64(42);
+        let mut source = GenerationSource::Rand(&mut rng);
+        
+        let original = StackType::Int;
+        for _ in 0..10 {
+            let wrong = TypeConfusionMutator::choose_wrong_type(original, &mut source);
+            assert_ne!(wrong, original, "should choose different type");
+        }
+    }
+
+    #[test]
+    fn test_typeconfusion_generate_opcode_for_type() {
+        let mut rng = ChaCha8Rng::seed_from_u64(42);
+        let mut source = GenerationSource::Rand(&mut rng);
+        
+        // test each type generates valid bytecode
+        let int_bytes = TypeConfusionMutator::generate_opcode_for_type(StackType::Int, &mut source);
+        assert_eq!(int_bytes[0], OpcodeKind::BinInt.as_u8());
+        assert_eq!(int_bytes.len(), 5); // opcode + 4 bytes
+        
+        let float_bytes = TypeConfusionMutator::generate_opcode_for_type(StackType::Float, &mut source);
+        assert_eq!(float_bytes[0], OpcodeKind::BinFloat.as_u8());
+        assert_eq!(float_bytes.len(), 9); // opcode + 8 bytes
+        
+        let string_bytes = TypeConfusionMutator::generate_opcode_for_type(StackType::String, &mut source);
+        assert_eq!(string_bytes[0], OpcodeKind::ShortBinUnicode.as_u8());
+        
+        let list_bytes = TypeConfusionMutator::generate_opcode_for_type(StackType::List, &mut source);
+        assert_eq!(list_bytes[0], OpcodeKind::EmptyList.as_u8());
+        assert_eq!(list_bytes.len(), 1);
+        
+        let none_bytes = TypeConfusionMutator::generate_opcode_for_type(StackType::None, &mut source);
+        assert_eq!(none_bytes[0], OpcodeKind::None.as_u8());
+        assert_eq!(none_bytes.len(), 1);
+    }
+
+    #[test]
+    fn test_typeconfusion_post_process_disabled_in_safe_mode() {
+        let mutator = TypeConfusionMutator::new(false);
+        let mut rng = ChaCha8Rng::seed_from_u64(42);
+        let mut source = GenerationSource::Rand(&mut rng);
+        
+        let snapshot = EmissionSnapshot {
+            stack_depth: 0,
+            output_len: 0,
+            memo_size: 0,
+            stack_delta: vec![],
+            output_delta: vec![0x4a, 0x01, 0x00, 0x00, 0x00], // BinInt
+            memo_delta: vec![],
+        };
+        
+        let mut output = vec![0x4a, 0x01, 0x00, 0x00, 0x00];
+        let result = mutator.post_process(&snapshot, &mut output, &mut source, 1.0);
+        
+        assert!(!result, "should not mutate in safe mode");
+    }
+
+    #[test]
+    fn test_typeconfusion_post_process_replaces_opcode() {
+        let mutator = TypeConfusionMutator::new(true);
+        let mut rng = ChaCha8Rng::seed_from_u64(42);
+        let mut source = GenerationSource::Rand(&mut rng);
+        
+        let snapshot = EmissionSnapshot {
+            stack_depth: 0,
+            output_len: 0,
+            memo_size: 0,
+            stack_delta: vec![],
+            output_delta: vec![0x4a, 0x01, 0x00, 0x00, 0x00], // BinInt
+            memo_delta: vec![],
+        };
+        
+        let output = vec![0x4a, 0x01, 0x00, 0x00, 0x00];
+        
+        // try multiple times to get a mutation
+        let mut mutated = false;
+        for _ in 0..20 {
+            let mut test_output = output.clone();
+            if mutator.post_process(&snapshot, &mut test_output, &mut source, 1.0) {
+                mutated = true;
+                assert_ne!(test_output[0], 0x4a, "should replace BinInt with different opcode");
+                break;
+            }
+        }
+        
+        assert!(mutated, "should eventually mutate at rate 1.0");
+    }
+}

@@ -61,3 +61,72 @@ impl Mutator for MemoIndexMutator {
         self.unsafe_mode
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::generator::GenerationSource;
+    use rand::SeedableRng;
+    use rand_chacha::ChaCha8Rng;
+
+    #[test]
+    fn test_memoindex_name() {
+        let mutator = MemoIndexMutator::new(false);
+        assert_eq!(mutator.name(), "memoindex");
+    }
+
+    #[test]
+    fn test_memoindex_safe_mode_small_perturbations() {
+        let mutator = MemoIndexMutator::new(false);
+        let mut rng = ChaCha8Rng::seed_from_u64(42);
+        let mut source = GenerationSource::Rand(&mut rng);
+        
+        let index = 10;
+        for _ in 0..20 {
+            if let Some(result) = mutator.mutate_memo_index(index, &mut source, 1.0) {
+                // safe mode: only ±1 or same
+                assert!(result == index || result == index + 1 || result == index - 1);
+            }
+        }
+    }
+
+    #[test]
+    fn test_memoindex_unsafe_mode_any_value() {
+        let mutator = MemoIndexMutator::new(true);
+        let mut rng = ChaCha8Rng::seed_from_u64(42);
+        let mut source = GenerationSource::Rand(&mut rng);
+        
+        let index = 10;
+        let mut found_far_value = false;
+        
+        for _ in 0..20 {
+            if let Some(result) = mutator.mutate_memo_index(index, &mut source, 1.0) {
+                // unsafe mode: can be any value 0-999
+                assert!(result < 1000);
+                if result > index + 10 || result < index.saturating_sub(10) {
+                    found_far_value = true;
+                }
+            }
+        }
+        
+        assert!(found_far_value, "unsafe mode should produce values far from original");
+    }
+
+    #[test]
+    fn test_memoindex_never_mutates_at_rate_0() {
+        let mutator = MemoIndexMutator::new(false);
+        let mut rng = ChaCha8Rng::seed_from_u64(42);
+        let mut source = GenerationSource::Rand(&mut rng);
+        
+        assert!(mutator.mutate_memo_index(5, &mut source, 0.0).is_none());
+    }
+
+    #[test]
+    fn test_memoindex_is_unsafe() {
+        let safe_mutator = MemoIndexMutator::new(false);
+        let unsafe_mutator = MemoIndexMutator::new(true);
+        
+        assert!(!safe_mutator.is_unsafe());
+        assert!(unsafe_mutator.is_unsafe());
+    }
+}

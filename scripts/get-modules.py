@@ -51,7 +51,7 @@ SKIP_INTROSPECT = {
     "lib2to3",  # Large parsing library - slow
 }
 
-OUTPUT_FILE = "stdlib_complete.txt"
+OUTPUT_FILE = "../data/stdlib_complete.txt"
 
 
 def get_all_module_names() -> Set[str]:

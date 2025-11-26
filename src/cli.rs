@@ -112,3 +112,69 @@ impl Cli {
         self.file.is_some()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_version_valid() {
+        assert_eq!(parse_version("0").unwrap(), 0);
+        assert_eq!(parse_version("3").unwrap(), 3);
+        assert_eq!(parse_version("5").unwrap(), 5);
+    }
+
+    #[test]
+    fn test_parse_version_invalid_too_high() {
+        assert!(parse_version("6").is_err());
+        assert!(parse_version("10").is_err());
+    }
+
+    #[test]
+    fn test_parse_version_invalid_format() {
+        assert!(parse_version("abc").is_err());
+        assert!(parse_version("3.5").is_err());
+        assert!(parse_version("-1").is_err());
+    }
+
+    #[test]
+    fn test_cli_mode_detection() {
+        use std::path::PathBuf;
+        
+        let cli_single = Cli {
+            file: Some(PathBuf::from("test.pkl")),
+            dir: None,
+            protocol: None,
+            samples: 10_000,
+            seed: None,
+            min_opcodes: 60,
+            max_opcodes: 300,
+            mutators: vec![],
+            mutation_rate: 0.1,
+            unsafe_mutations: false,
+            allow_ext: false,
+            allow_buffer: false,
+        };
+        
+        assert!(cli_single.is_single_file_mode());
+        assert!(!cli_single.is_batch_mode());
+        
+        let cli_batch = Cli {
+            file: None,
+            dir: Some(PathBuf::from("output")),
+            protocol: None,
+            samples: 10_000,
+            seed: None,
+            min_opcodes: 60,
+            max_opcodes: 300,
+            mutators: vec![],
+            mutation_rate: 0.1,
+            unsafe_mutations: false,
+            allow_ext: false,
+            allow_buffer: false,
+        };
+        
+        assert!(!cli_batch.is_single_file_mode());
+        assert!(cli_batch.is_batch_mode());
+    }
+}
