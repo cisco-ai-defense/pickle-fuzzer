@@ -14,9 +14,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use cisco_ai_defense_pickle_fuzzer::{Cli, Generator, Version};
 use clap::Parser;
 use color_eyre::Result;
-use cisco_ai_defense_pickle_fuzzer::{Cli, Generator, Version};
 use rand::Rng;
 use rayon::prelude::*;
 
@@ -26,14 +26,16 @@ fn main() -> Result<()> {
     let args = Cli::parse();
 
     // Expand "all" meta-option and create mutators
-    let mutator_kinds: Vec<cisco_ai_defense_pickle_fuzzer::MutatorKind> =
-        if args.mutators.contains(&cisco_ai_defense_pickle_fuzzer::MutatorKind::All) {
-            // If "all" is specified, use all mutators
-            cisco_ai_defense_pickle_fuzzer::MutatorKind::all_mutators()
-        } else {
-            // Otherwise use the specified mutators
-            args.mutators.clone()
-        };
+    let mutator_kinds: Vec<cisco_ai_defense_pickle_fuzzer::MutatorKind> = if args
+        .mutators
+        .contains(&cisco_ai_defense_pickle_fuzzer::MutatorKind::All)
+    {
+        // If "all" is specified, use all mutators
+        cisco_ai_defense_pickle_fuzzer::MutatorKind::all_mutators()
+    } else {
+        // Otherwise use the specified mutators
+        args.mutators.clone()
+    };
 
     let mutators: Vec<Box<dyn cisco_ai_defense_pickle_fuzzer::Mutator>> = mutator_kinds
         .iter()
