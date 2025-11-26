@@ -26,7 +26,7 @@ cargo-fuzz = true
 [dependencies]
 libfuzzer-sys = "0.4"
 
-[dependencies.pickle-fuzzer]
+[dependencies.cisco-ai-defense-pickle-fuzzer]
 path = ".."
 
 [workspace]
