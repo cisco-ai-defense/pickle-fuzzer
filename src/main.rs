@@ -28,10 +28,10 @@ fn main() -> Result<()> {
     // Expand "all" meta-option and create mutators
     let mutator_kinds: Vec<pickle_fuzzer::MutatorKind> =
         if args.mutators.contains(&pickle_fuzzer::MutatorKind::All) {
-            // If "all" is specified, use all mutators
-            pickle_fuzzer::MutatorKind::all_mutators()
+            // if "all" is specified, use all mutators (excluding MemoIndex unless --unsafe-mutations)
+            pickle_fuzzer::MutatorKind::all_mutators(args.unsafe_mutations)
         } else {
-            // Otherwise use the specified mutators
+            // otherwise use the specified mutators
             args.mutators.clone()
         };
 
@@ -67,6 +67,11 @@ fn main() -> Result<()> {
                 .with_unsafe_mutations(args.unsafe_mutations);
         }
 
+        // apply EXT and buffer opcode flags
+        generator = generator
+            .with_ext_opcodes(args.allow_ext)
+            .with_buffer_opcodes(args.allow_buffer);
+
         let bytecode = generator.generate()?;
         std::fs::write(&file, &bytecode)?;
         println!("Generated {} bytes to {:?}", bytecode.len(), file);
@@ -82,6 +87,8 @@ fn main() -> Result<()> {
         let max_opcodes = args.max_opcodes;
         let mutation_rate = args.mutation_rate;
         let unsafe_mutations = args.unsafe_mutations;
+        let allow_ext_opcodes = args.allow_ext;
+        let allow_buffer_opcodes = args.allow_buffer;
         let mutator_kinds_for_batch = mutator_kinds.clone();
 
         let errors: Vec<_> = (0..args.samples)
@@ -115,6 +122,11 @@ fn main() -> Result<()> {
                         .with_mutation_rate(mutation_rate)
                         .with_unsafe_mutations(unsafe_mutations);
                 }
+
+                // apply EXT and buffer opcode flags
+                generator = generator
+                    .with_ext_opcodes(allow_ext_opcodes)
+                    .with_buffer_opcodes(allow_buffer_opcodes);
 
                 let bytecode = match generator.generate() {
                     Ok(b) => b,

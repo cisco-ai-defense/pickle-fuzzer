@@ -80,11 +80,27 @@ Arguments:
   [FILE]  Output file path (for single file mode)
 
 Options:
-  -d, --dir <DIR>          Output directory for batch generation
-  -n, --samples <SAMPLES>  Number of samples to generate [default: 1000]
-  -h, --help              Print help
-  -V, --version           Print version
+  -d, --dir <DIR>                      Output directory for batch generation
+  -p, --protocol <PROTOCOL>            Pickle protocol version (0-5)
+  -s, --samples <SAMPLES>              Number of samples to generate [default: 10000]
+      --seed <SEED>                    Seed for reproducible generation
+      --min-opcodes <MIN_OPCODES>      Minimum opcodes to generate [default: 60]
+      --max-opcodes <MAX_OPCODES>      Maximum opcodes to generate [default: 300]
+      --mutators <MUTATOR>...          Enable mutators (all, bitflip, boundary, offbyone,
+                                       stringlen, character, memoindex, typeconfusion)
+      --mutation-rate <MUTATION_RATE>  Mutation probability 0.0-1.0 [default: 0.1]
+      --unsafe-mutations               Allow mutations that may produce invalid pickles
+      --allow-ext                      Allow EXT* opcodes (requires extension registry)
+      --allow-buffer                   Allow buffer opcodes (requires buffer support)
+  -h, --help                           Print help
+  -V, --version                        Print version
 ```
+
+**Special Opcodes:**
+- `--allow-ext`: Enables EXT1/EXT2/EXT4 opcodes. Only use if your unpickler has a configured extension registry, otherwise unpickling will fail.
+- `--allow-buffer`: Enables NEXT_BUFFER/READONLY_BUFFER opcodes. Only use if your unpickler has out-of-band buffer callbacks configured.
+
+By default, these opcodes are disabled to ensure generated pickles work with standard Python's `pickle` module without additional configuration.
 
 ## Python Bindings
 
@@ -327,22 +343,23 @@ Validated 50000 pickle file(s); 0 failure(s).
 
 | Metric | Performance |
 |--------|-------------|
-| **Small pickles** (10-30 opcodes) | ~5.3 µs |
-| **Medium pickles** (60-300 opcodes) | ~53 µs |
-| **Large pickles** (500-1000 opcodes) | ~610 µs |
-| **Single-threaded throughput** | ~8,400 pickles/sec |
-| **Multi-core (8 cores)** | ~67,000 pickles/sec |
+| **Small pickles** (10-30 opcodes) | ~5.2 µs |
+| **Medium pickles** (60-300 opcodes) | ~48 µs |
+| **Large pickles** (200-500 opcodes) | ~154 µs |
+| **XLarge pickles** (500-1000 opcodes) | ~514 µs |
+| **Single-threaded throughput** | ~10,000 pickles/sec |
+| **Multi-core (8 cores)** | ~80,000 pickles/sec |
 
 ### Protocol Performance
 
 | Protocol | Time | Use Case |
 |----------|------|----------|
-| V0 | 36 µs | ASCII-based, legacy |
-| V1 | 48 µs | **Fastest**, binary |
-| V2 | 50 µs | Fast, PROTO opcode |
-| V3 | 53 µs | **Default**, balanced |
-| V4 | 171 µs | FRAME support |
-| V5 | 161 µs | Out-of-band buffers |
+| V0 | 33 µs | **Fastest** ASCII-based, legacy |
+| V1 | 41 µs | binary |
+| V2 | 46 µs | Fast, PROTO opcode |
+| V3 | 48 µs | **Default**, balanced |
+| V4 | 139 µs | FRAME support |
+| V5 | 134 µs | Out-of-band buffers |
 
 ### Running Benchmarks
 

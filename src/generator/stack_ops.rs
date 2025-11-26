@@ -38,27 +38,6 @@ use crate::stack::{InstanceObject, StackObject, StackObjectRef};
 use std::collections::{HashMap, HashSet};
 
 impl Generator {
-    /// check if the stack is ready for the STOP opcode.
-    ///
-    /// the STOP opcode requires exactly one non-MARK item on the stack, which
-    /// becomes the final result of unpickling. this method validates that
-    /// precondition.
-    ///
-    /// # Returns
-    /// `true` if there is exactly one non-MARK item on the stack, `false` otherwise.
-    pub(super) fn is_ready_for_stop(&self) -> bool {
-        if self.state.stack.len() > 1 || self.state.stack.len() == 0 {
-            return false;
-        }
-
-        // ensure the single item on stack is not a MARK
-        if let Some(top) = self.peek() {
-            !matches!(*top.borrow(), StackObject::Mark)
-        } else {
-            false
-        }
-    }
-
     /// clean up the stack to prepare for the STOP opcode.
     ///
     /// the STOP opcode requires exactly one item on the stack. this method
@@ -66,7 +45,7 @@ impl Generator {
     /// using the following strategies:
     ///
     /// - if stack is empty: push a None value
-    /// - if stack has one MARK: replace with empty tuple
+    /// - if stack has one MARK: pop it and push None
     /// - if stack has multiple items with MARK: combine items above MARK into tuple
     /// - if stack has multiple items without MARK: combine top items into tuples
     ///
@@ -75,69 +54,48 @@ impl Generator {
     pub(super) fn cleanup_for_stop(&mut self) {
         use OpcodeKind::*;
 
-        let max_cleanup_iterations = 20;
-
-        for _ in 0..max_cleanup_iterations {
-            if self.is_ready_for_stop() {
-                return; // Done!
-            }
-
-            let stack_len = self.state.stack.len();
-
-            if stack_len == 0 {
-                // empty stack - add a simple value
-                self.emit_opcode(None);
-            } else if stack_len == 1 {
-                // exactly 1 item - check if it's a MARK
-                if let Some(top) = self.peek() {
-                    if matches!(*top.borrow(), StackObject::Mark) {
-                        // replace MARK with an empty tuple
-                        self.pop();
-                        self.emit_opcode(EmptyTuple);
-                    } else {
-                        // single non-MARK item - we're done!
-                        return;
-                    }
-                }
-            } else {
-                // multiple items on stack - try to combine them
-                if self.has_mark() {
-                    // consume everything from MARK to TOS into a tuple
-                    self.emit_opcode(Tuple);
-                } else if stack_len >= 3 {
-                    // combine top 3 items into a tuple
-                    self.emit_opcode(Tuple3);
-                } else if stack_len >= 2 {
-                    // combine top 2 items into a tuple
-                    self.emit_opcode(Tuple2);
-                } else {
-                    // single item remaining
-                    break;
-                }
-            }
+        // remove any MARKs by using TUPLE
+        // TUPLE pops items until it finds a MARK, pops the MARK, and pushes a tuple
+        // note: DUP no longer duplicates MARKs, so each MARK corresponds to a real
+        // MARK byte in the pickle
+        while self.has_mark() {
+            self.emit_opcode(Tuple);
         }
 
-        // failsafe: if we still don't have exactly 1 item, force it
-        while self.state.stack.len() > 1 {
-            if self.has_mark() {
-                self.emit_opcode(Tuple);
-            } else if self.state.stack.len() >= 2 {
+        // at this point, stack has no MARKs, just regular items
+        // keep combining until we have exactly 1 item
+        // use TUPLE2/TUPLE3 which don't require MARKs
+        let mut safety_counter = 0;
+        while self.state.stack.len() > 1 && safety_counter < 10000 {
+            safety_counter += 1;
+            
+            let stack_len = self.state.stack.len();
+            if stack_len >= 3 {
+                self.emit_opcode(Tuple3);
+            } else if stack_len == 2 {
                 self.emit_opcode(Tuple2);
+            } else if stack_len == 1 {
+                // exactly 1 item, we're done
+                break;
             } else {
+                // stack is empty - shouldn't happen but break to be safe
                 break;
             }
         }
 
-        // if stack is empty after all that, add None
+        // handle edge case: stack is empty
         if self.state.stack.len() == 0 {
             self.emit_opcode(None);
         }
 
-        // if final item is MARK, replace with empty tuple
+        // final check
         if let Some(top) = self.peek() {
             if matches!(*top.borrow(), StackObject::Mark) {
+                // should never happen after our cleanup, but handle it anyway
                 self.pop();
-                self.emit_opcode(EmptyTuple);
+                if self.state.stack.len() == 0 {
+                    self.emit_opcode(None);
+                }
             }
         }
     }
@@ -169,16 +127,20 @@ impl Generator {
     /// - maintains type information for validation of subsequent opcodes
     pub(super) fn process_stack_ops(&mut self, opcode: OpcodeKind, arg_bytes: Option<&[u8]>) {
         use OpcodeKind::*;
+        
         match opcode {
             Pop => {
                 self.pop();
             }
             Dup => {
                 if let Some(top) = self.peek() {
-                    // peek holds a reference to self, which the
-                    // borrow checker complains about. so, we
-                    // just pop, push, push instead
-                    self.state.stack.inner.push(top.clone());
+                    // IMPORTANT: don't duplicate a MARK!
+                    // duplicating MARKs creates invalid pickle state that causes
+                    // TUPLE to fail (it tries to pop until MARK, but if stack is
+                    // all MARKs, it crashes with "list index out of range")
+                    if !matches!(*top.borrow(), StackObject::Mark) {
+                        self.state.stack.inner.push(top.clone());
+                    }
                 }
             }
             Mark => {
@@ -379,20 +341,24 @@ impl Generator {
                 self.push(StackObject::FrozenSet(accumulated));
             }
             Int => {
-                if let Some(arg_bytes) = arg_bytes {
+                // always push, even if parsing fails
+                let value = if let Some(arg_bytes) = arg_bytes {
                     if let Ok(value_str) = std::str::from_utf8(arg_bytes) {
-                        if let Ok(value) = value_str.trim().parse::<i64>() {
-                            // in protocol 0-1, INT opcode with 00/01 represents booleans
-                            // protocol 2+ has dedicated NEWTRUE/NEWFALSE opcodes
-                            if matches!(self.state.version, Version::V0 | Version::V1)
-                                && (value == 0 || value == 1)
-                            {
-                                self.push(StackObject::Bool(value == 1));
-                            } else {
-                                self.push(StackObject::Int(value));
-                            }
-                        }
+                        value_str.trim().parse::<i64>().unwrap_or(0)
+                    } else {
+                        0
                     }
+                } else {
+                    0
+                };
+                // in protocol 0-1, INT opcode with 00/01 represents booleans
+                // protocol 2+ has dedicated NEWTRUE/NEWFALSE opcodes
+                if matches!(self.state.version, Version::V0 | Version::V1)
+                    && (value == 0 || value == 1)
+                {
+                    self.push(StackObject::Bool(value == 1));
+                } else {
+                    self.push(StackObject::Int(value));
                 }
             }
             BinInt => {
@@ -428,15 +394,19 @@ impl Generator {
                 }
             }
             Long => {
-                if let Some(arg_bytes) = arg_bytes {
+                // always push, even if parsing fails
+                let value = if let Some(arg_bytes) = arg_bytes {
                     if let Ok(value_str) = std::str::from_utf8(arg_bytes) {
-                        // strip trailing 'L'
-                        let value_str = value_str.trim_end_matches('L');
-                        if let Ok(value) = value_str.trim().parse::<i64>() {
-                            self.push(StackObject::Int(value));
-                        }
+                        // strip trailing 'L\n'
+                        let value_str = value_str.trim_end_matches('\n').trim_end_matches('L');
+                        value_str.trim().parse::<i64>().unwrap_or(0)
+                    } else {
+                        0
                     }
-                }
+                } else {
+                    0
+                };
+                self.push(StackObject::Int(value));
             }
             Long1 => {
                 if let Some(arg_bytes) = arg_bytes {
@@ -481,20 +451,31 @@ impl Generator {
                 }
             }
             String | ShortBinUnicode | Unicode | BinUnicode | BinUnicode8 => {
-                if let Some(arg_bytes) = arg_bytes {
-                    let value = std::string::String::from_utf8_lossy(arg_bytes);
-                    self.push(StackObject::String(value.into_owned()));
-                }
+                // always push a string, even if arg_bytes is None
+                let value = if let Some(arg_bytes) = arg_bytes {
+                    std::string::String::from_utf8_lossy(arg_bytes).into_owned()
+                } else {
+                    std::string::String::new()
+                };
+                self.push(StackObject::String(value));
             }
             BinString | ShortBinString | BinBytes | ShortBinBytes | BinBytes8 => {
-                if let Some(arg_bytes) = arg_bytes {
-                    self.push(StackObject::Bytes(arg_bytes.to_vec()));
-                }
+                // always push bytes, even if arg_bytes is None
+                let bytes = if let Some(arg_bytes) = arg_bytes {
+                    arg_bytes.to_vec()
+                } else {
+                    Vec::new()
+                };
+                self.push(StackObject::Bytes(bytes));
             }
             ByteArray8 => {
-                if let Some(arg_bytes) = arg_bytes {
-                    self.push(StackObject::ByteArray(arg_bytes.to_vec()));
-                }
+                // always push bytearray, even if arg_bytes is None
+                let bytes = if let Some(arg_bytes) = arg_bytes {
+                    arg_bytes.to_vec()
+                } else {
+                    Vec::new()
+                };
+                self.push(StackObject::ByteArray(bytes));
             }
             None => {
                 self.push(StackObject::None);
@@ -506,13 +487,17 @@ impl Generator {
                 self.push(StackObject::Bool(false));
             }
             Float => {
-                if let Some(arg_bytes) = arg_bytes {
+                // always push, even if parsing fails
+                let value = if let Some(arg_bytes) = arg_bytes {
                     if let Ok(value_str) = std::str::from_utf8(arg_bytes) {
-                        if let Ok(value) = value_str.trim().parse::<f64>() {
-                            self.push(StackObject::Float(value));
-                        }
+                        value_str.trim().parse::<f64>().unwrap_or(0.0)
+                    } else {
+                        0.0
                     }
-                }
+                } else {
+                    0.0
+                };
+                self.push(StackObject::Float(value));
             }
             BinFloat => {
                 if let Some(arg_bytes) = arg_bytes {
@@ -755,15 +740,14 @@ impl Generator {
                 }
             }
             Put => {
+                // PUT doesn't pop - it just peeks at TOS and stores in memo
                 if let Some(arg_bytes) = arg_bytes {
                     if let Ok(index_str) = std::str::from_utf8(arg_bytes) {
                         if let Ok(index) = index_str.trim().parse() {
-                            if let Some(top) = self.pop() {
-                                if !matches!(*top.borrow(), StackObject::Mark) {
-                                    self.put(index, top.borrow().clone());
-                                    self.push(top.borrow().clone())
-                                } else {
-                                    self.push(top.borrow().clone()) // put it back, don't memoize
+                            if let Some(top) = self.peek() {
+                                let obj = top.borrow().clone();
+                                if !matches!(obj, StackObject::Mark) {
+                                    self.put(index, obj);
                                 }
                             }
                         }
@@ -771,19 +755,19 @@ impl Generator {
                 }
             }
             BinPut => {
+                // BINPUT doesn't pop - it just peeks at TOS and stores in memo
                 if let Some(arg_bytes) = arg_bytes {
                     let index = arg_bytes[0] as usize;
-                    if let Some(top) = self.pop() {
-                        if !matches!(*top.borrow(), StackObject::Mark) {
-                            self.put(index, top.borrow().clone());
-                            self.push(top.borrow().clone())
-                        } else {
-                            self.push(top.borrow().clone())
+                    if let Some(top) = self.peek() {
+                        let obj = top.borrow().clone();
+                        if !matches!(obj, StackObject::Mark) {
+                            self.put(index, obj);
                         }
                     }
                 }
             }
             LongBinPut => {
+                // LONG_BINPUT doesn't pop - it just peeks at TOS and stores in memo
                 if let Some(arg_bytes) = arg_bytes {
                     let index = u32::from_le_bytes([
                         arg_bytes[0],
@@ -791,12 +775,10 @@ impl Generator {
                         arg_bytes[2],
                         arg_bytes[3],
                     ]) as usize;
-                    if let Some(top) = self.pop() {
-                        if !matches!(*top.borrow(), StackObject::Mark) {
-                            self.put(index, top.borrow().clone());
-                            self.push(top.borrow().clone())
-                        } else {
-                            self.push(top.borrow().clone())
+                    if let Some(top) = self.peek() {
+                        let obj = top.borrow().clone();
+                        if !matches!(obj, StackObject::Mark) {
+                            self.put(index, obj);
                         }
                     }
                 }
@@ -818,10 +800,20 @@ impl Generator {
                 self.push(StackObject::Callable(placeholder));
             }
 
-            Proto | NextBuffer | ReadOnlyBuffer | Stop | Frame => {
+            NextBuffer => {
+                // NEXT_BUFFER pushes a buffer object to the stack
+                self.push(StackObject::Bytes(Vec::new())); // Use empty bytes as placeholder
+            }
+            Proto | ReadOnlyBuffer | Stop | Frame => {
                 // these opcodes don't manipulate the stack, but we're being
                 // explicit about it so that we know we've covered all opcodes
             }
         }
+        
+        // uncomment for debugging:
+        // let after = self.state.stack.len();
+        // let delta = after as i32 - before as i32;
+        // eprintln!("  @{:4} {:20} {} -> {} (Δ{:+})", 
+        //     pos, format!("{:?}", opcode), before, after, delta);
     }
 }
