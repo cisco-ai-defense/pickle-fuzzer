@@ -460,9 +460,10 @@ For detailed development guidelines, see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ### Core Documentation
 - [CONTRIBUTING.md](CONTRIBUTING.md) - How to contribute to the project
-- [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) - Community guidelines and expectations
+- [DEVELOPING.md](DEVELOPING.md) - Development setup and workflows
 - [TESTING.md](TESTING.md) - Testing procedures and validation
 - [BENCHMARKS.md](BENCHMARKS.md) - Performance benchmarks and optimization
+- [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) - Community guidelines and expectations
 
 ### Fuzzing Documentation
 - [fuzz/README.md](fuzz/README.md) - Fuzzing pickle-fuzzer itself with cargo-fuzz
