@@ -219,7 +219,7 @@ impl Generator {
             // EXT* opcodes require a configured extension registry
             // allow only if explicitly enabled via with_ext_opcodes()
             Ext1 | Ext2 | Ext4 => self.allow_ext_opcodes,
-            
+
             // NextBuffer/ReadOnlyBuffer require out-of-band buffer support
             // allow only if explicitly enabled via with_buffer_opcodes()
             NextBuffer | ReadOnlyBuffer => self.allow_buffer_opcodes,

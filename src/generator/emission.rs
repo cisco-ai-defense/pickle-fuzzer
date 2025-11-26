@@ -170,11 +170,12 @@ impl Generator {
                     let index = keys[source.gen_range(0, keys.len())];
                     let mutated_index = self.mutate_memo_index(index, source);
                     // in unsafe mode, allow any mutated index; otherwise validate it exists
-                    let index = if self.unsafe_mutations || self.state.memo.contains_key(&mutated_index) {
-                        mutated_index
-                    } else {
-                        index
-                    };
+                    let index =
+                        if self.unsafe_mutations || self.state.memo.contains_key(&mutated_index) {
+                            mutated_index
+                        } else {
+                            index
+                        };
                     self.output.push(Get.as_u8());
                     let index_str = format!("{}\n", index);
                     let arg_bytes = index_str.as_bytes();
@@ -195,7 +196,9 @@ impl Generator {
                     let index = valid_indices[source.gen_range(0, valid_indices.len())];
                     let mutated_index = self.mutate_memo_index(index, source).min(255);
                     // in unsafe mode, allow any mutated index; otherwise validate it exists and fits in u8
-                    let index = if self.unsafe_mutations || (mutated_index < 256 && self.state.memo.contains_key(&mutated_index)) {
+                    let index = if self.unsafe_mutations
+                        || (mutated_index < 256 && self.state.memo.contains_key(&mutated_index))
+                    {
                         mutated_index
                     } else {
                         index
@@ -212,11 +215,12 @@ impl Generator {
                     let index = keys[source.gen_range(0, keys.len())];
                     let mutated_index = self.mutate_memo_index(index, source);
                     // in unsafe mode, allow any mutated index; otherwise validate it exists
-                    let index = if self.unsafe_mutations || self.state.memo.contains_key(&mutated_index) {
-                        mutated_index
-                    } else {
-                        index
-                    };
+                    let index =
+                        if self.unsafe_mutations || self.state.memo.contains_key(&mutated_index) {
+                            mutated_index
+                        } else {
+                            index
+                        };
                     self.output.push(LongBinGet.as_u8());
                     let index_bytes = (index as u32).to_le_bytes();
                     self.output.extend_from_slice(&index_bytes);
@@ -327,7 +331,7 @@ impl Generator {
                 self.output.push(opcode.as_u8());
                 // escape special characters: backslash, single quote, newline, tab, etc.
                 let escaped = s
-                    .replace('\\', "\\\\")  // backslash must be first
+                    .replace('\\', "\\\\") // backslash must be first
                     .replace('\'', "\\'")
                     .replace('\n', "\\n")
                     .replace('\r', "\\r")

@@ -88,7 +88,7 @@ pub enum MutatorKind {
 
 impl MutatorKind {
     /// returns all individual mutator kinds (excluding the "all" meta-option).
-    /// 
+    ///
     /// if `unsafe_mutations` is false, excludes MemoIndex mutator since it can
     /// generate invalid memo references even in safe mode.
     pub fn all_mutators(unsafe_mutations: bool) -> Vec<MutatorKind> {
@@ -100,12 +100,12 @@ impl MutatorKind {
             MutatorKind::Character,
             MutatorKind::Typeconfusion,
         ];
-        
+
         // only include MemoIndex when explicitly using unsafe mutations
         if unsafe_mutations {
             mutators.push(MutatorKind::Memoindex);
         }
-        
+
         mutators
     }
 

@@ -68,7 +68,7 @@ impl Generator {
         let mut safety_counter = 0;
         while self.state.stack.len() > 1 && safety_counter < 10000 {
             safety_counter += 1;
-            
+
             let stack_len = self.state.stack.len();
             if stack_len >= 3 {
                 self.emit_opcode(Tuple3);
@@ -127,7 +127,7 @@ impl Generator {
     /// - maintains type information for validation of subsequent opcodes
     pub(super) fn process_stack_ops(&mut self, opcode: OpcodeKind, arg_bytes: Option<&[u8]>) {
         use OpcodeKind::*;
-        
+
         match opcode {
             Pop => {
                 self.pop();
@@ -809,11 +809,11 @@ impl Generator {
                 // explicit about it so that we know we've covered all opcodes
             }
         }
-        
+
         // uncomment for debugging:
         // let after = self.state.stack.len();
         // let delta = after as i32 - before as i32;
-        // eprintln!("  @{:4} {:20} {} -> {} (Δ{:+})", 
+        // eprintln!("  @{:4} {:20} {} -> {} (Δ{:+})",
         //     pos, format!("{:?}", opcode), before, after, delta);
     }
 }
