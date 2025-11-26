@@ -1,6 +1,6 @@
 # Testing Guide
 
-This guide covers all aspects of testing `cisco-ai-defense-pickle-fuzzer`.
+This guide covers all aspects of testing `pickle-fuzzer`.
 
 ## Overview
 
@@ -64,7 +64,7 @@ Coverage settings are configured in `tarpaulin.toml`. Current configuration:
 ### Test Organization
 
 ```
-cisco-ai-defense-pickle-fuzzer/
+pickle-fuzzer/
 ├── src/
 │   ├── generator.rs    # Unit tests at bottom of file
 │   └── ...
@@ -128,7 +128,7 @@ See [BENCHMARKS.md](BENCHMARKS.md) for detailed performance analysis and results
 ```bash
 # Profile generation
 cargo build --release
-time ./target/release/cisco-ai-defense-pickle-fuzzer --dir samples --samples 10000
+time ./target/release/pickle-fuzzer --dir samples --samples 10000
 ```
 
 ## Python Tests

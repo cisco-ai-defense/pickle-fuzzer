@@ -1,6 +1,6 @@
 # Development Guide
 
-This guide covers the technical details for developing `cisco-ai-defense-pickle-fuzzer`.
+This guide covers the technical details for developing `pickle-fuzzer`.
 
 ## Prerequisites
 
@@ -47,7 +47,7 @@ cargo run -- --dir samples --samples 100 --protocol 3
 ## Code Organization
 
 ```
-cisco-ai-defense-pickle-fuzzer/
+pickle-fuzzer/
 ├── src/
 │   ├── lib.rs              # Library root and public API
 │   ├── main.rs             # CLI entry point
@@ -275,7 +275,7 @@ eprintln!("Debug: {:?}", value);
 cargo build
 
 # Run with lldb (macOS) or gdb (Linux)
-rust-lldb target/debug/cisco-ai-defense-pickle-fuzzer
+rust-lldb target/debug/pickle-fuzzer
 ```
 
 ### Profiling
