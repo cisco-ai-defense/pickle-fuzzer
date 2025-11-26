@@ -29,8 +29,8 @@ exclude-files = [
 # Run tests with all features
 all-features = true
 
-# Timeout for tests (in seconds)
-timeout = 120
+# Timeout duration for tests to finish
+test-timeout = "2m"
 
 # Follow symbolic links
 follow-exec = true

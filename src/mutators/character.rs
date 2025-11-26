@@ -61,3 +61,77 @@ impl Mutator for CharacterMutator {
         Some(result)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::generator::GenerationSource;
+    use rand::SeedableRng;
+    use rand_chacha::ChaCha8Rng;
+
+    #[test]
+    fn test_character_name() {
+        let mutator = CharacterMutator;
+        assert_eq!(mutator.name(), "character");
+    }
+
+    #[test]
+    fn test_character_mutate_string() {
+        let mutator = CharacterMutator;
+        let mut rng = ChaCha8Rng::seed_from_u64(42);
+        let mut source = GenerationSource::Rand(&mut rng);
+        
+        let original = "hello".to_string();
+        let result = mutator.mutate_string(original.clone(), &mut source, 1.0);
+        
+        assert!(result.is_some());
+        let mutated = result.unwrap();
+        assert_eq!(mutated.len(), original.len());
+        assert_ne!(mutated, original);
+    }
+
+    #[test]
+    fn test_character_mutate_string_empty() {
+        let mutator = CharacterMutator;
+        let mut rng = ChaCha8Rng::seed_from_u64(42);
+        let mut source = GenerationSource::Rand(&mut rng);
+        
+        let result = mutator.mutate_string(String::new(), &mut source, 1.0);
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_character_mutate_bytes() {
+        let mutator = CharacterMutator;
+        let mut rng = ChaCha8Rng::seed_from_u64(42);
+        let mut source = GenerationSource::Rand(&mut rng);
+        
+        let original = vec![1, 2, 3, 4, 5];
+        let result = mutator.mutate_bytes(original.clone(), &mut source, 1.0);
+        
+        assert!(result.is_some());
+        let mutated = result.unwrap();
+        assert_eq!(mutated.len(), original.len());
+        assert_ne!(mutated, original);
+    }
+
+    #[test]
+    fn test_character_mutate_bytes_empty() {
+        let mutator = CharacterMutator;
+        let mut rng = ChaCha8Rng::seed_from_u64(42);
+        let mut source = GenerationSource::Rand(&mut rng);
+        
+        let result = mutator.mutate_bytes(vec![], &mut source, 1.0);
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_character_never_mutates_at_rate_0() {
+        let mutator = CharacterMutator;
+        let mut rng = ChaCha8Rng::seed_from_u64(42);
+        let mut source = GenerationSource::Rand(&mut rng);
+        
+        assert!(mutator.mutate_string("test".to_string(), &mut source, 0.0).is_none());
+        assert!(mutator.mutate_bytes(vec![1, 2, 3], &mut source, 0.0).is_none());
+    }
+}

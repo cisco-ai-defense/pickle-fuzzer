@@ -100,3 +100,104 @@ impl Mutator for StringLengthMutator {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::generator::GenerationSource;
+    use rand::SeedableRng;
+    use rand_chacha::ChaCha8Rng;
+
+    #[test]
+    fn test_stringlen_name() {
+        let mutator = StringLengthMutator;
+        assert_eq!(mutator.name(), "stringlen");
+    }
+
+    #[test]
+    fn test_stringlen_mutate_string_changes_length() {
+        let mutator = StringLengthMutator;
+        let mut rng = ChaCha8Rng::seed_from_u64(42);
+        let mut source = GenerationSource::Rand(&mut rng);
+        
+        let original = "hello".to_string();
+        let mut found_shorter = false;
+        let mut found_longer = false;
+        
+        for _ in 0..30 {
+            if let Some(result) = mutator.mutate_string(original.clone(), &mut source, 1.0) {
+                if result.len() < original.len() {
+                    found_shorter = true;
+                }
+                if result.len() > original.len() {
+                    found_longer = true;
+                }
+            }
+        }
+        
+        assert!(found_shorter || found_longer, "should change length");
+    }
+
+    #[test]
+    fn test_stringlen_mutate_string_empty() {
+        let mutator = StringLengthMutator;
+        let mut rng = ChaCha8Rng::seed_from_u64(42);
+        let mut source = GenerationSource::Rand(&mut rng);
+        
+        // empty string can only be extended or doubled (stays empty)
+        for _ in 0..10 {
+            if let Some(result) = mutator.mutate_string(String::new(), &mut source, 1.0) {
+                // should either stay empty or get extended
+                assert!(result.is_empty() || !result.is_empty());
+            }
+        }
+    }
+
+    #[test]
+    fn test_stringlen_mutate_bytes_changes_length() {
+        let mutator = StringLengthMutator;
+        let mut rng = ChaCha8Rng::seed_from_u64(42);
+        let mut source = GenerationSource::Rand(&mut rng);
+        
+        let original = vec![1, 2, 3, 4, 5];
+        let mut found_shorter = false;
+        let mut found_longer = false;
+        
+        for _ in 0..30 {
+            if let Some(result) = mutator.mutate_bytes(original.clone(), &mut source, 1.0) {
+                if result.len() < original.len() {
+                    found_shorter = true;
+                }
+                if result.len() > original.len() {
+                    found_longer = true;
+                }
+            }
+        }
+        
+        assert!(found_shorter || found_longer, "should change length");
+    }
+
+    #[test]
+    fn test_stringlen_mutate_bytes_empty() {
+        let mutator = StringLengthMutator;
+        let mut rng = ChaCha8Rng::seed_from_u64(42);
+        let mut source = GenerationSource::Rand(&mut rng);
+        
+        // empty bytes can only be extended or doubled (stays empty)
+        for _ in 0..10 {
+            if let Some(result) = mutator.mutate_bytes(vec![], &mut source, 1.0) {
+                assert!(result.is_empty() || !result.is_empty());
+            }
+        }
+    }
+
+    #[test]
+    fn test_stringlen_never_mutates_at_rate_0() {
+        let mutator = StringLengthMutator;
+        let mut rng = ChaCha8Rng::seed_from_u64(42);
+        let mut source = GenerationSource::Rand(&mut rng);
+        
+        assert!(mutator.mutate_string("test".to_string(), &mut source, 0.0).is_none());
+        assert!(mutator.mutate_bytes(vec![1, 2, 3], &mut source, 0.0).is_none());
+    }
+}

@@ -58,7 +58,7 @@ static STDLIB_MODULES: OnceLock<Vec<String>> = OnceLock::new();
 
 fn load_stdlib_complete() -> &'static Vec<String> {
     STDLIB_MODULES.get_or_init(|| {
-        let content = include_str!("../../stdlib_complete.txt");
+        let content = include_str!("../../data/stdlib_complete.txt");
         content.lines().map(|s| s.to_string()).collect()
     })
 }

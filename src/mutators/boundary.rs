@@ -59,3 +59,75 @@ impl Mutator for BoundaryMutator {
         Some(boundaries[source.gen_range(0, boundaries.len())])
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::generator::GenerationSource;
+    use rand::SeedableRng;
+    use rand_chacha::ChaCha8Rng;
+
+    #[test]
+    fn test_boundary_name() {
+        let mutator = BoundaryMutator;
+        assert_eq!(mutator.name(), "boundary");
+    }
+
+    #[test]
+    fn test_boundary_int_returns_boundary_values() {
+        let mutator = BoundaryMutator;
+        let mut rng = ChaCha8Rng::seed_from_u64(42);
+        let mut source = GenerationSource::Rand(&mut rng);
+        
+        let boundaries = [0, -1, 1, i32::MAX, i32::MIN];
+        
+        for _ in 0..20 {
+            if let Some(result) = mutator.mutate_int(100, &mut source, 1.0) {
+                assert!(boundaries.contains(&result));
+            }
+        }
+    }
+
+    #[test]
+    fn test_boundary_int_never_mutates_at_rate_0() {
+        let mutator = BoundaryMutator;
+        let mut rng = ChaCha8Rng::seed_from_u64(42);
+        let mut source = GenerationSource::Rand(&mut rng);
+        
+        let result = mutator.mutate_int(100, &mut source, 0.0);
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_boundary_long_returns_boundary_values() {
+        let mutator = BoundaryMutator;
+        let mut rng = ChaCha8Rng::seed_from_u64(42);
+        let mut source = GenerationSource::Rand(&mut rng);
+        
+        let boundaries = [0, -1, 1, i64::MAX, i64::MIN];
+        
+        for _ in 0..20 {
+            if let Some(result) = mutator.mutate_long(1000, &mut source, 1.0) {
+                assert!(boundaries.contains(&result));
+            }
+        }
+    }
+
+    #[test]
+    fn test_boundary_float_returns_boundary_values() {
+        let mutator = BoundaryMutator;
+        let mut rng = ChaCha8Rng::seed_from_u64(42);
+        let mut source = GenerationSource::Rand(&mut rng);
+        
+        for _ in 0..20 {
+            if let Some(result) = mutator.mutate_float(1.5, &mut source, 1.0) {
+                // check it's one of the expected boundary values
+                assert!(
+                    result == 0.0 || result == -1.0 || result == 1.0 ||
+                    result == f64::MAX || result == f64::MIN ||
+                    result.is_infinite() || result.is_nan()
+                );
+            }
+        }
+    }
+}

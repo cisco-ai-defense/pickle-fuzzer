@@ -136,3 +136,156 @@ fn test_protocol_v2_and_above_have_proto() {
         );
     }
 }
+
+#[test]
+fn test_cli_single_file_generation() {
+    use std::fs;
+    use std::process::Command;
+    
+    let temp_file = "/tmp/test_pickle_cli.pkl";
+    
+    // clean up if exists
+    let _ = fs::remove_file(temp_file);
+    
+    let output = Command::new("cargo")
+        .args(&["run", "--quiet", "--", temp_file])
+        .output()
+        .expect("failed to execute command");
+    
+    assert!(output.status.success(), "CLI command failed: {:?}", String::from_utf8_lossy(&output.stderr));
+    assert!(fs::metadata(temp_file).is_ok(), "output file not created");
+    
+    let contents = fs::read(temp_file).expect("failed to read output file");
+    assert!(!contents.is_empty(), "output file is empty");
+    assert_eq!(contents[contents.len() - 1], b'.', "missing STOP opcode");
+    
+    // cleanup
+    let _ = fs::remove_file(temp_file);
+}
+
+#[test]
+fn test_cli_with_protocol_flag() {
+    use std::fs;
+    use std::process::Command;
+    
+    let temp_file = "/tmp/test_pickle_protocol.pkl";
+    let _ = fs::remove_file(temp_file);
+    
+    let output = Command::new("cargo")
+        .args(&["run", "--quiet", "--", "--protocol", "4", temp_file])
+        .output()
+        .expect("failed to execute command");
+    
+    assert!(output.status.success(), "CLI command failed");
+    
+    let contents = fs::read(temp_file).expect("failed to read output file");
+    assert_eq!(contents[0], 0x80, "should start with PROTO opcode");
+    assert_eq!(contents[1], 4, "should be protocol 4");
+    
+    let _ = fs::remove_file(temp_file);
+}
+
+#[test]
+fn test_cli_with_seed_produces_deterministic_output() {
+    use std::fs;
+    use std::process::Command;
+    
+    let temp_file1 = "/tmp/test_pickle_seed1.pkl";
+    let temp_file2 = "/tmp/test_pickle_seed2.pkl";
+    
+    let _ = fs::remove_file(temp_file1);
+    let _ = fs::remove_file(temp_file2);
+    
+    // generate with same seed twice
+    Command::new("cargo")
+        .args(&["run", "--quiet", "--", "--seed", "42", temp_file1])
+        .output()
+        .expect("failed to execute command");
+    
+    Command::new("cargo")
+        .args(&["run", "--quiet", "--", "--seed", "42", temp_file2])
+        .output()
+        .expect("failed to execute command");
+    
+    let contents1 = fs::read(temp_file1).expect("failed to read file 1");
+    let contents2 = fs::read(temp_file2).expect("failed to read file 2");
+    
+    assert_eq!(contents1, contents2, "same seed should produce identical output");
+    
+    let _ = fs::remove_file(temp_file1);
+    let _ = fs::remove_file(temp_file2);
+}
+
+#[test]
+fn test_cli_batch_mode() {
+    use std::fs;
+    use std::process::Command;
+    
+    let temp_dir = "/tmp/test_pickle_batch";
+    let _ = fs::remove_dir_all(temp_dir);
+    fs::create_dir_all(temp_dir).expect("failed to create temp dir");
+    
+    let output = Command::new("cargo")
+        .args(&["run", "--quiet", "--", "--dir", temp_dir, "--samples", "5"])
+        .output()
+        .expect("failed to execute command");
+    
+    assert!(output.status.success(), "batch generation failed: {:?}", String::from_utf8_lossy(&output.stderr));
+    
+    // check that files were created
+    let entries = fs::read_dir(temp_dir).expect("failed to read dir");
+    let count = entries.count();
+    assert_eq!(count, 5, "should create 5 pickle files");
+    
+    // verify one of the files
+    let test_file = format!("{}/0.pkl", temp_dir);
+    let contents = fs::read(&test_file).expect("failed to read generated file");
+    assert!(!contents.is_empty());
+    assert_eq!(contents[contents.len() - 1], b'.');
+    
+    let _ = fs::remove_dir_all(temp_dir);
+}
+
+#[test]
+fn test_cli_with_opcode_range() {
+    use std::fs;
+    use std::process::Command;
+    
+    let temp_file = "/tmp/test_pickle_opcodes.pkl";
+    let _ = fs::remove_file(temp_file);
+    
+    let output = Command::new("cargo")
+        .args(&["run", "--quiet", "--", 
+                "--min-opcodes", "10", 
+                "--max-opcodes", "20",
+                temp_file])
+        .output()
+        .expect("failed to execute command");
+    
+    assert!(output.status.success(), "CLI command failed");
+    assert!(fs::metadata(temp_file).is_ok(), "output file not created");
+    
+    let _ = fs::remove_file(temp_file);
+}
+
+#[test]
+fn test_cli_with_mutators() {
+    use std::fs;
+    use std::process::Command;
+    
+    let temp_file = "/tmp/test_pickle_mutators.pkl";
+    let _ = fs::remove_file(temp_file);
+    
+    let output = Command::new("cargo")
+        .args(&["run", "--quiet", "--", 
+                "--mutators", "bitflip", "boundary",
+                "--mutation-rate", "0.5",
+                temp_file])
+        .output()
+        .expect("failed to execute command");
+    
+    assert!(output.status.success(), "CLI command with mutators failed");
+    assert!(fs::metadata(temp_file).is_ok(), "output file not created");
+    
+    let _ = fs::remove_file(temp_file);
+}
