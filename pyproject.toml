@@ -15,7 +15,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 [project]
-name = "pickle-fuzzer"
+name = "cisco-ai-defense-pickle-fuzzer"
 version = "0.1.0"
 description = "Structure-aware pickle generator for fuzzing"
 readme = "README.md"

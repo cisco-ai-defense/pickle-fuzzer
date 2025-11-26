@@ -15,7 +15,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 [package]
-name = "pickle-fuzzer"
+name = "cisco-ai-defense-pickle-fuzzer"
 version = "0.1.0"
 edition = "2021"
 authors = ["Cisco AI Defense"]
@@ -27,7 +27,10 @@ readme = "README.md"
 license = "Apache-2.0"
 keywords = ["fuzzing", "pickle", "security", "testing", "generator", "corpus"]
 categories = ["development-tools::testing", "command-line-utilities"]
-default-run = "pickle-fuzzer"
+
+[[bin]]
+name = "pickle-fuzzer"
+path = "src/main.rs"
 
 [features]
 default = []
@@ -53,4 +56,5 @@ harness = false
 
 [lib]
 name = "pickle_fuzzer"
+path = "src/lib.rs"
 crate-type = ["rlib", "cdylib"]
