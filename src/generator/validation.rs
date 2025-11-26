@@ -97,7 +97,21 @@ impl Generator {
 
         match opcode {
             // stack manipulation - need items on stack
-            Pop | Dup => self.state.stack.len() >= 1,
+            Pop => self.state.stack.len() >= 1,
+            Dup => {
+                // DUP requires at least 1 item, and TOS can't be a MARK
+                // duplicating MARKs creates invalid pickle state that causes
+                // various MARK-reliant opcodes to crash
+                if self.state.stack.len() < 1 {
+                    return false;
+                }
+
+                if let Some(top) = self.peek() {
+                    !matches!(*top.borrow(), StackObject::Mark)
+                } else {
+                    false
+                }
+            }
 
             // list operations
             Append => self.state.stack.len() >= 2 && self.is_list_at(1),
@@ -202,13 +216,15 @@ impl Generator {
             | ByteArray8 | EmptyList | EmptyDict | EmptyTuple | EmptySet | Global | PersID
             | Mark => true,
 
-            // disable EXT* opcodes - they cause unpredictable scanner behavior
-            // since we can't properly simulate extension registry lookups
-            Ext1 | Ext2 | Ext4 => true,
-            NextBuffer | ReadOnlyBuffer => true,
+            // EXT* opcodes require a configured extension registry
+            // allow only if explicitly enabled via with_ext_opcodes()
+            Ext1 | Ext2 | Ext4 => self.allow_ext_opcodes,
+
+            // NextBuffer/ReadOnlyBuffer require out-of-band buffer support
+            // allow only if explicitly enabled via with_buffer_opcodes()
+            NextBuffer | ReadOnlyBuffer => self.allow_buffer_opcodes,
 
             // frame: handled specially after generation is complete
-            // NextBuffer/ReadOnlyBuffer: rely on out-of-band buffers; disable to avoid invalid states
             Frame => false, // don't emit during generation, will be inserted at the end if needed
         }
     }

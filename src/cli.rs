@@ -91,6 +91,14 @@ pub struct Cli {
     /// allow unsafe mutations that may produce invalid pickles
     #[arg(long)]
     pub unsafe_mutations: bool,
+
+    /// allow EXT* opcodes (requires configured extension registry in unpickler)
+    #[arg(long)]
+    pub allow_ext: bool,
+
+    /// allow NEXT_BUFFER/READONLY_BUFFER opcodes (requires out-of-band buffer support in unpickler)
+    #[arg(long)]
+    pub allow_buffer: bool,
 }
 
 impl Cli {

@@ -168,7 +168,14 @@ impl Generator {
                 keys.sort_unstable();
                 if !keys.is_empty() {
                     let index = keys[source.gen_range(0, keys.len())];
-                    let index = self.mutate_memo_index(index, source);
+                    let mutated_index = self.mutate_memo_index(index, source);
+                    // in unsafe mode, allow any mutated index; otherwise validate it exists
+                    let index =
+                        if self.unsafe_mutations || self.state.memo.contains_key(&mutated_index) {
+                            mutated_index
+                        } else {
+                            index
+                        };
                     self.output.push(Get.as_u8());
                     let index_str = format!("{}\n", index);
                     let arg_bytes = index_str.as_bytes();
@@ -187,7 +194,15 @@ impl Generator {
                 valid_indices.sort_unstable();
                 if !valid_indices.is_empty() {
                     let index = valid_indices[source.gen_range(0, valid_indices.len())];
-                    let index = self.mutate_memo_index(index, source).min(255);
+                    let mutated_index = self.mutate_memo_index(index, source).min(255);
+                    // in unsafe mode, allow any mutated index; otherwise validate it exists and fits in u8
+                    let index = if self.unsafe_mutations
+                        || (mutated_index < 256 && self.state.memo.contains_key(&mutated_index))
+                    {
+                        mutated_index
+                    } else {
+                        index
+                    };
                     self.output.push(BinGet.as_u8());
                     self.output.push(index as u8);
                     self.process_stack_ops(BinGet, Some(&[index as u8]));
@@ -198,7 +213,14 @@ impl Generator {
                 keys.sort_unstable();
                 if !keys.is_empty() {
                     let index = keys[source.gen_range(0, keys.len())];
-                    let index = self.mutate_memo_index(index, source);
+                    let mutated_index = self.mutate_memo_index(index, source);
+                    // in unsafe mode, allow any mutated index; otherwise validate it exists
+                    let index =
+                        if self.unsafe_mutations || self.state.memo.contains_key(&mutated_index) {
+                            mutated_index
+                        } else {
+                            index
+                        };
                     self.output.push(LongBinGet.as_u8());
                     let index_bytes = (index as u32).to_le_bytes();
                     self.output.extend_from_slice(&index_bytes);
@@ -305,17 +327,26 @@ impl Generator {
 
         match opcode {
             String => {
-                // string opcode (protocol 0) requires properly quoted python string
+                // string opcode (protocol 0) requires properly escaped and quoted python string
                 self.output.push(opcode.as_u8());
-                let quoted = format!("'{}'\n", s); // add single quotes
+                // escape special characters: backslash, single quote, newline, tab, etc.
+                let escaped = s
+                    .replace('\\', "\\\\") // backslash must be first
+                    .replace('\'', "\\'")
+                    .replace('\n', "\\n")
+                    .replace('\r', "\\r")
+                    .replace('\t', "\\t");
+                let quoted = format!("'{}'\n", escaped);
                 let arg_bytes = quoted.into_bytes();
                 self.output.extend_from_slice(&arg_bytes);
                 self.process_stack_ops(opcode, Some(&arg_bytes));
             }
             Unicode => {
-                // unicode opcode (protocol 0) - raw unicode string with newline
+                // unicode opcode (protocol 0) - uses rawunicodeescape encoding
+                // must escape backslashes to avoid invalid unicode escape sequences like \U
                 self.output.push(opcode.as_u8());
-                let s_with_newline = format!("{}\n", s);
+                let escaped = s.replace('\\', "\\\\");
+                let s_with_newline = format!("{}\n", escaped);
                 let arg_bytes = s_with_newline.into_bytes();
                 self.output.extend_from_slice(&arg_bytes);
                 self.process_stack_ops(opcode, Some(&arg_bytes));
