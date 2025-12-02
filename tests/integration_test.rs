@@ -123,6 +123,7 @@ fn test_protocol_v0_generates_ascii() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_protocol_v2_and_above_have_proto() {
     for version_num in 2..=5 {
         let version = Version::try_from(version_num).unwrap();
