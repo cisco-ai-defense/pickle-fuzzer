@@ -15,9 +15,9 @@
 // limitations under the License.
 use std::fs;
 
+use assert_cmd::cargo::cargo_bin_cmd;
 use tempfile::NamedTempFile;
 use tempfile::TempDir;
-use assert_cmd::cargo::cargo_bin_cmd;
 
 use pickle_fuzzer::{Generator, Version};
 
@@ -230,13 +230,7 @@ fn test_cli_with_opcode_range() {
     let temp_path = temp_file.path().to_str().unwrap();
 
     cargo_bin_cmd!("pickle-fuzzer")
-        .args([
-            "--min-opcodes",
-            "10",
-            "--max-opcodes",
-            "20",
-            temp_path,
-        ])
+        .args(["--min-opcodes", "10", "--max-opcodes", "20", temp_path])
         .assert()
         .success();
 
