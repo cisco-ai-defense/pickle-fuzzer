@@ -22,7 +22,7 @@ output-dir = "coverage"
 [run]
 # Exclude test code from coverage
 exclude-files = [
-    "tests/*",
+    "tests/**/*",
     "benches/*",
 ]
 

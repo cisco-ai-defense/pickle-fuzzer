@@ -17,7 +17,6 @@
 use pickle_fuzzer::{Generator, Version};
 
 #[test]
-#[ignore = "skipped due to error in CI, test with --ignored to run locally"]
 fn test_generate_all_protocol_versions() {
     for version_num in 0..=5 {
         let version = Version::try_from(version_num).unwrap();
@@ -119,7 +118,6 @@ fn test_protocol_v0_generates_ascii() {
 }
 
 #[test]
-#[ignore = "skipped due to error in CI, test with --ignored to run locally"]
 fn test_protocol_v2_and_above_have_proto() {
     for version_num in 2..=5 {
         let version = Version::try_from(version_num).unwrap();
@@ -226,7 +224,6 @@ fn test_cli_with_seed_produces_deterministic_output() {
 }
 
 #[test]
-#[ignore = "skipped due to timeout issues in CI, test with --ignored to run locally"]
 fn test_cli_batch_mode() {
     use std::fs;
     use std::process::Command;

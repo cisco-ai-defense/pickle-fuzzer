@@ -96,7 +96,7 @@ jobs:
         run: cargo install cargo-tarpaulin
 
       - name: Generate coverage
-        run: cargo tarpaulin --out Xml --output-dir coverage
+        run: cargo tarpaulin
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4
