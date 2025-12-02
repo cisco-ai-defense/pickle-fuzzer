@@ -228,7 +228,7 @@ fn test_cli_batch_mode() {
     use std::fs;
     use std::process::Command;
 
-    let temp_dir = "/tmp/test_pickle_batch";
+    let temp_dir = "tests/test_pickle_batch";
     let _ = fs::remove_dir_all(temp_dir);
     fs::create_dir_all(temp_dir).expect("failed to create temp dir");
 
