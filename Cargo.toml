@@ -48,7 +48,12 @@ rayon = "1.11.0"
 serde = { version = "1.0.228", features = ["derive"] }
 
 [dev-dependencies]
+assert_cmd = "2.0"
 criterion = { version = "0.5", features = ["html_reports"] }
+tempfile = "3.8"
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(tarpaulin)"] }
 
 [[bench]]
 name = "generation"

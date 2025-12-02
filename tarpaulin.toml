@@ -35,5 +35,5 @@ test-timeout = "2m"
 # Follow symbolic links
 follow-exec = true
 
-# Include doc tests
+# Run all tests including integration tests, but exclude their files from coverage
 run-types = ["Tests", "Doctests"]
