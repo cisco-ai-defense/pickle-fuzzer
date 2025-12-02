@@ -28,6 +28,9 @@ license = "Apache-2.0"
 keywords = ["fuzzing", "pickle", "security", "testing", "generator", "corpus"]
 categories = ["development-tools::testing", "command-line-utilities"]
 
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(tarpaulin)'] }
+
 [[bin]]
 name = "pickle-fuzzer"
 path = "src/main.rs"

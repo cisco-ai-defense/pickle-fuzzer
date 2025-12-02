@@ -138,6 +138,7 @@ fn test_protocol_v2_and_above_have_proto() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_cli_single_file_generation() {
     use std::fs;
     use std::process::Command;
@@ -164,6 +165,7 @@ fn test_cli_single_file_generation() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_cli_with_protocol_flag() {
     use std::fs;
     use std::process::Command;
@@ -185,6 +187,7 @@ fn test_cli_with_protocol_flag() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_cli_with_seed_produces_deterministic_output() {
     use std::fs;
     use std::process::Command;
@@ -216,6 +219,7 @@ fn test_cli_with_seed_produces_deterministic_output() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_cli_batch_mode() {
     use std::fs;
     use std::process::Command;
@@ -248,6 +252,7 @@ fn test_cli_batch_mode() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_cli_with_opcode_range() {
     use std::fs;
     use std::process::Command;
@@ -275,6 +280,7 @@ fn test_cli_with_opcode_range() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_cli_with_mutators() {
     use std::fs;
     use std::process::Command;
