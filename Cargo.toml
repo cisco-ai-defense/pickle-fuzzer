@@ -28,9 +28,6 @@ license = "Apache-2.0"
 keywords = ["fuzzing", "pickle", "security", "testing", "generator", "corpus"]
 categories = ["development-tools::testing", "command-line-utilities"]
 
-[lints.rust]
-unexpected_cfgs = { level = "warn", check-cfg = ['cfg(tarpaulin)'] }
-
 [[bin]]
 name = "pickle-fuzzer"
 path = "src/main.rs"
@@ -51,6 +48,7 @@ rayon = "1.11.0"
 serde = { version = "1.0.228", features = ["derive"] }
 
 [dev-dependencies]
+assert_cmd = "2.0"
 criterion = { version = "0.5", features = ["html_reports"] }
 tempfile = "3.8"
 

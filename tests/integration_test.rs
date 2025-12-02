@@ -13,6 +13,11 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+use std::fs;
+
+use tempfile::NamedTempFile;
+use tempfile::TempDir;
+use assert_cmd::cargo::cargo_bin_cmd;
 
 use pickle_fuzzer::{Generator, Version};
 
@@ -138,25 +143,15 @@ fn test_protocol_v2_and_above_have_proto() {
 }
 
 #[test]
-#[cfg_attr(tarpaulin, ignore)]
 fn test_cli_single_file_generation() {
-    use std::fs;
-    use std::process::Command;
-    use tempfile::NamedTempFile;
-
     let temp_file = NamedTempFile::new().expect("failed to create temp file");
     let temp_path = temp_file.path().to_str().unwrap();
 
-    let output = Command::new("cargo")
-        .args(["run", "--quiet", "--", temp_path])
-        .output()
-        .expect("failed to execute command");
+    cargo_bin_cmd!("pickle-fuzzer")
+        .arg(temp_path)
+        .assert()
+        .success();
 
-    assert!(
-        output.status.success(),
-        "CLI command failed: {:?}",
-        String::from_utf8_lossy(&output.stderr)
-    );
     assert!(fs::metadata(temp_path).is_ok(), "output file not created");
 
     let contents = fs::read(temp_path).expect("failed to read output file");
@@ -165,21 +160,14 @@ fn test_cli_single_file_generation() {
 }
 
 #[test]
-#[cfg_attr(tarpaulin, ignore)]
 fn test_cli_with_protocol_flag() {
-    use std::fs;
-    use std::process::Command;
-    use tempfile::NamedTempFile;
-
     let temp_file = NamedTempFile::new().expect("failed to create temp file");
     let temp_path = temp_file.path().to_str().unwrap();
 
-    let output = Command::new("cargo")
-        .args(["run", "--quiet", "--", "--protocol", "4", temp_path])
-        .output()
-        .expect("failed to execute command");
-
-    assert!(output.status.success(), "CLI command failed");
+    cargo_bin_cmd!("pickle-fuzzer")
+        .args(["--protocol", "4", temp_path])
+        .assert()
+        .success();
 
     let contents = fs::read(temp_path).expect("failed to read output file");
     assert_eq!(contents[0], 0x80, "should start with PROTO opcode");
@@ -187,27 +175,22 @@ fn test_cli_with_protocol_flag() {
 }
 
 #[test]
-#[cfg_attr(tarpaulin, ignore)]
 fn test_cli_with_seed_produces_deterministic_output() {
-    use std::fs;
-    use std::process::Command;
-    use tempfile::NamedTempFile;
-
     let temp_file1 = NamedTempFile::new().expect("failed to create temp file 1");
     let temp_file2 = NamedTempFile::new().expect("failed to create temp file 2");
     let temp_path1 = temp_file1.path().to_str().unwrap();
     let temp_path2 = temp_file2.path().to_str().unwrap();
 
     // generate with same seed twice
-    Command::new("cargo")
-        .args(["run", "--quiet", "--", "--seed", "42", temp_path1])
-        .output()
-        .expect("failed to execute command");
+    cargo_bin_cmd!("pickle-fuzzer")
+        .args(["--seed", "42", temp_path1])
+        .assert()
+        .success();
 
-    Command::new("cargo")
-        .args(["run", "--quiet", "--", "--seed", "42", temp_path2])
-        .output()
-        .expect("failed to execute command");
+    cargo_bin_cmd!("pickle-fuzzer")
+        .args(["--seed", "42", temp_path2])
+        .assert()
+        .success();
 
     let contents1 = fs::read(temp_path1).expect("failed to read file 1");
     let contents2 = fs::read(temp_path2).expect("failed to read file 2");
@@ -219,25 +202,14 @@ fn test_cli_with_seed_produces_deterministic_output() {
 }
 
 #[test]
-#[cfg_attr(tarpaulin, ignore)]
 fn test_cli_batch_mode() {
-    use std::fs;
-    use std::process::Command;
-    use tempfile::TempDir;
-
     let temp_dir = TempDir::new().expect("failed to create temp dir");
     let temp_path = temp_dir.path().to_str().unwrap();
 
-    let output = Command::new("cargo")
-        .args(["run", "--quiet", "--", "--dir", temp_path, "--samples", "5"])
-        .output()
-        .expect("failed to execute command");
-
-    assert!(
-        output.status.success(),
-        "batch generation failed: {:?}",
-        String::from_utf8_lossy(&output.stderr)
-    );
+    cargo_bin_cmd!("pickle-fuzzer")
+        .args(["--dir", temp_path, "--samples", "5"])
+        .assert()
+        .success();
 
     // check that files were created
     let entries = fs::read_dir(temp_path).expect("failed to read dir");
@@ -252,48 +224,31 @@ fn test_cli_batch_mode() {
 }
 
 #[test]
-#[cfg_attr(tarpaulin, ignore)]
 fn test_cli_with_opcode_range() {
-    use std::fs;
-    use std::process::Command;
-    use tempfile::NamedTempFile;
-
     let temp_file = NamedTempFile::new().expect("failed to create temp file");
     let temp_path = temp_file.path().to_str().unwrap();
 
-    let output = Command::new("cargo")
+    cargo_bin_cmd!("pickle-fuzzer")
         .args([
-            "run",
-            "--quiet",
-            "--",
             "--min-opcodes",
             "10",
             "--max-opcodes",
             "20",
             temp_path,
         ])
-        .output()
-        .expect("failed to execute command");
+        .assert()
+        .success();
 
-    assert!(output.status.success(), "CLI command failed");
     assert!(fs::metadata(temp_path).is_ok(), "output file not created");
 }
 
 #[test]
-#[cfg_attr(tarpaulin, ignore)]
 fn test_cli_with_mutators() {
-    use std::fs;
-    use std::process::Command;
-    use tempfile::NamedTempFile;
-
     let temp_file = NamedTempFile::new().expect("failed to create temp file");
     let temp_path = temp_file.path().to_str().unwrap();
 
-    let output = Command::new("cargo")
+    cargo_bin_cmd!("pickle-fuzzer")
         .args([
-            "run",
-            "--quiet",
-            "--",
             "--mutators",
             "bitflip",
             "boundary",
@@ -301,9 +256,8 @@ fn test_cli_with_mutators() {
             "0.5",
             temp_path,
         ])
-        .output()
-        .expect("failed to execute command");
+        .assert()
+        .success();
 
-    assert!(output.status.success(), "CLI command with mutators failed");
     assert!(fs::metadata(temp_path).is_ok(), "output file not created");
 }
