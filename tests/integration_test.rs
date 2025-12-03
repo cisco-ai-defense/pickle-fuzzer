@@ -22,6 +22,7 @@ use tempfile::TempDir;
 use pickle_fuzzer::{Generator, Version};
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_generate_all_protocol_versions() {
     for version_num in 0..=5 {
         let version = Version::try_from(version_num).unwrap();
