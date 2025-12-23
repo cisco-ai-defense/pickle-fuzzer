@@ -4,7 +4,7 @@ author: Cisco AI Defense
 
 inputs:
   mode:
-    description: Mode to run: "cli" (default) or "atheris".
+    description: "Mode to run: cli (default) or atheris."
     required: false
     default: "cli"
   version:
