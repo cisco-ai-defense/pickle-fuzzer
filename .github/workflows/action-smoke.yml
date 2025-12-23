@@ -1,0 +1,63 @@
+name: Action Smoke Test
+
+on:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Release tag to install (e.g., v1.2.3). Defaults to latest.
+        required: false
+        default: latest
+
+jobs:
+  smoke:
+    name: Action Smoke Test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install pickle-fuzzer
+        uses: ./
+        with:
+          version: ${{ inputs.version }}
+          mode: cli
+          install_only: true
+
+      - name: Verify version
+        run: pickle-fuzzer --version
+
+      - name: Generate samples
+        uses: ./
+        with:
+          version: ${{ inputs.version }}
+          mode: cli
+          output_dir: samples
+          samples: 5
+          protocol: 4
+
+      - name: Verify samples
+        run: |
+          test -f samples/0.pkl
+          ls -la samples
+
+  atheris:
+    name: Action Smoke Test (atheris)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Atheris harness
+        uses: ./
+        with:
+          mode: atheris
+          harness: python/examples/ci-harness.py
+          harness_args: "-max_total_time=5"

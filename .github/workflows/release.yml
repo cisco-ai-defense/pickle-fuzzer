@@ -78,6 +78,31 @@ jobs:
         if: matrix.os != 'windows-latest'
         run: strip target/${{ matrix.target }}/release/${{ matrix.artifact_name }}
 
+      - name: Generate checksum (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          artifact_path="target/${{ matrix.target }}/release/${{ matrix.artifact_name }}"
+          checksum_path="target/${{ matrix.target }}/release/${{ matrix.asset_name }}.sha256"
+          hash="$(sha256sum "$artifact_path" | awk '{print $1}')"
+          echo "${hash}  ${{ matrix.asset_name }}" > "$checksum_path"
+
+      - name: Generate checksum (macOS)
+        if: matrix.os == 'macos-latest'
+        run: |
+          artifact_path="target/${{ matrix.target }}/release/${{ matrix.artifact_name }}"
+          checksum_path="target/${{ matrix.target }}/release/${{ matrix.asset_name }}.sha256"
+          hash="$(shasum -a 256 "$artifact_path" | awk '{print $1}')"
+          echo "${hash}  ${{ matrix.asset_name }}" > "$checksum_path"
+
+      - name: Generate checksum (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          $artifactPath = "target/${{ matrix.target }}/release/${{ matrix.artifact_name }}"
+          $checksumPath = "target/${{ matrix.target }}/release/${{ matrix.asset_name }}.sha256"
+          $hash = (Get-FileHash -Algorithm SHA256 $artifactPath).Hash.ToLower()
+          "$hash  ${{ matrix.asset_name }}" | Out-File -FilePath $checksumPath -Encoding ascii
+
       - name: Upload Release Asset
         uses: actions/upload-release-asset@v1
         env:
@@ -87,6 +112,16 @@ jobs:
           asset_path: ./target/${{ matrix.target }}/release/${{ matrix.artifact_name }}
           asset_name: ${{ matrix.asset_name }}
           asset_content_type: application/octet-stream
+
+      - name: Upload checksum asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create-release.outputs.upload_url }}
+          asset_path: ./target/${{ matrix.target }}/release/${{ matrix.asset_name }}.sha256
+          asset_name: ${{ matrix.asset_name }}.sha256
+          asset_content_type: text/plain
 
   # publish-crate:
   #   name: Publish to crates.io

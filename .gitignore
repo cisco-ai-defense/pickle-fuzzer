@@ -22,3 +22,4 @@ target/criterion/
 
 # python fuzzing corpus (keep directory structure, ignore contents)
 python/examples/fuzz-corpus/
+.DS_Store
