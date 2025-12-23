@@ -22,9 +22,14 @@ fi
 python -m pip install --upgrade pip
 python -m pip install maturin atheris
 
+wheel_dir="${RUNNER_TEMP:-/tmp}/pickle-fuzzer-wheels"
+mkdir -p "$wheel_dir"
+
 pushd "${GITHUB_ACTION_PATH}" >/dev/null
-maturin develop --release
+maturin build --release -o "$wheel_dir"
 popd >/dev/null
+
+python -m pip install "${wheel_dir}"/*.whl
 
 if [[ -n "${INPUT_HARNESS_ARGS:-}" ]]; then
   echo "Running harness: ${harness_path} ${INPUT_HARNESS_ARGS}"
