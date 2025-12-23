@@ -21,10 +21,40 @@ jobs:
     name: Create Release
     runs-on: ubuntu-latest
     outputs:
-      upload_url: ${{ steps.create_release.outputs.upload_url }}
+      upload_url: ${{ steps.finalize.outputs.upload_url }}
+      release_exists: ${{ steps.release_info.outputs.exists }}
     steps:
+      - name: Check if release exists
+        id: release_info
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG_NAME: ${{ github.event.inputs.tag || github.ref_name }}
+        shell: bash
+        run: |
+          api_url="https://api.github.com/repos/${{ github.repository }}/releases/tags/${TAG_NAME}"
+          response_path="${RUNNER_TEMP}/release_info.json"
+          status_code=$(curl -sS -o "${response_path}" -w "%{http_code}" \
+            -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            "${api_url}")
+          if [[ "${status_code}" == "200" ]]; then
+            upload_url=$(python3 - <<'PY'
+import json
+import sys
+with open(sys.argv[1], "r", encoding="utf-8") as handle:
+    data = json.load(handle)
+print(data.get("upload_url", ""))
+PY
+            "${response_path}")
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "upload_url=${upload_url}" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Create Release
         id: create_release
+        if: steps.release_info.outputs.exists != 'true'
         uses: actions/create-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -34,9 +64,19 @@ jobs:
           draft: false
           prerelease: false
 
+      - name: Finalize release metadata
+        id: finalize
+        run: |
+          upload_url="${{ steps.create_release.outputs.upload_url }}"
+          if [ "${{ steps.release_info.outputs.exists }}" = "true" ]; then
+            upload_url="${{ steps.release_info.outputs.upload_url }}"
+          fi
+          echo "upload_url=${upload_url}" >> "$GITHUB_OUTPUT"
+
   build-release:
     name: Build Release Binaries
     needs: create-release
+    if: needs.create-release.outputs.release_exists != 'true'
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
