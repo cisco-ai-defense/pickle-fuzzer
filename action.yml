@@ -106,12 +106,44 @@ runs:
 
     - id: install
       if: ${{ inputs.mode == 'cli' }}
+      env:
+        INPUT_VERSION: ${{ inputs.version }}
+        INPUT_ARGS: ${{ inputs.args }}
+        INPUT_OUTPUT_DIR: ${{ inputs.output_dir }}
+        INPUT_OUTPUT_FILE: ${{ inputs.output_file }}
+        INPUT_SAMPLES: ${{ inputs.samples }}
+        INPUT_PROTOCOL: ${{ inputs.protocol }}
+        INPUT_SEED: ${{ inputs.seed }}
+        INPUT_MIN_OPCODES: ${{ inputs.min_opcodes }}
+        INPUT_MAX_OPCODES: ${{ inputs.max_opcodes }}
+        INPUT_MUTATORS: ${{ inputs.mutators }}
+        INPUT_MUTATION_RATE: ${{ inputs.mutation_rate }}
+        INPUT_UNSAFE_MUTATIONS: ${{ inputs.unsafe_mutations }}
+        INPUT_ALLOW_EXT: ${{ inputs.allow_ext }}
+        INPUT_ALLOW_BUFFER: ${{ inputs.allow_buffer }}
+        INPUT_INSTALL_ONLY: ${{ inputs.install_only }}
       shell: bash
       run: |
         "${GITHUB_ACTION_PATH}/scripts/action-install.sh"
 
     - name: Run pickle-fuzzer
       if: ${{ inputs.mode == 'cli' && inputs.install_only != 'true' && inputs.install_only != '1' && inputs.install_only != 'yes' }}
+      env:
+        INPUT_VERSION: ${{ inputs.version }}
+        INPUT_ARGS: ${{ inputs.args }}
+        INPUT_OUTPUT_DIR: ${{ inputs.output_dir }}
+        INPUT_OUTPUT_FILE: ${{ inputs.output_file }}
+        INPUT_SAMPLES: ${{ inputs.samples }}
+        INPUT_PROTOCOL: ${{ inputs.protocol }}
+        INPUT_SEED: ${{ inputs.seed }}
+        INPUT_MIN_OPCODES: ${{ inputs.min_opcodes }}
+        INPUT_MAX_OPCODES: ${{ inputs.max_opcodes }}
+        INPUT_MUTATORS: ${{ inputs.mutators }}
+        INPUT_MUTATION_RATE: ${{ inputs.mutation_rate }}
+        INPUT_UNSAFE_MUTATIONS: ${{ inputs.unsafe_mutations }}
+        INPUT_ALLOW_EXT: ${{ inputs.allow_ext }}
+        INPUT_ALLOW_BUFFER: ${{ inputs.allow_buffer }}
+        INPUT_INSTALL_ONLY: ${{ inputs.install_only }}
       shell: bash
       run: |
         "${GITHUB_ACTION_PATH}/scripts/action-run.sh"
@@ -128,6 +160,9 @@ runs:
 
     - name: Run Atheris harness
       if: ${{ inputs.mode == 'atheris' }}
+      env:
+        INPUT_HARNESS: ${{ inputs.harness }}
+        INPUT_HARNESS_ARGS: ${{ inputs.harness_args }}
       shell: bash
       run: |
         "${GITHUB_ACTION_PATH}/scripts/action-atheris.sh"
