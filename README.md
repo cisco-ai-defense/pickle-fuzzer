@@ -51,6 +51,49 @@ The binary will be available at `target/release/pickle-fuzzer`.
 cargo install pickle-fuzzer
 ```
 
+## GitHub Action
+
+Use `pickle-fuzzer` directly in CI with the bundled GitHub Action. The action
+supports two modes: a CLI generator (`mode: cli`) and an Atheris harness runner
+(`mode: atheris`).
+
+```yaml
+name: Pickle Fuzzing
+on: [pull_request]
+jobs:
+  fuzz:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+- uses: cisco-ai-defense/pickle-fuzzer@v1
+  with:
+    mode: cli
+    output_dir: samples
+    samples: 200
+```
+
+You can also pass raw arguments via `args`, which overrides other inputs:
+
+```yaml
+- uses: cisco-ai-defense/pickle-fuzzer@v1
+  with:
+    args: "--dir samples --samples 200 --protocol 4"
+```
+
+Set `version` to download a specific release tag, or `install_only: true` to
+just add the binary to `PATH` without running it.
+
+To run a custom Atheris harness (see `python/examples/harness.py` for a starter
+template), use `mode: atheris` and provide a harness path:
+
+```yaml
+- uses: cisco-ai-defense/pickle-fuzzer@v1
+  with:
+    mode: atheris
+    harness: fuzz_harness.py
+    harness_args: "-max_total_time=60"
+```
+
 ## Usage
 
 ### Generate a Single Pickle File
@@ -503,4 +546,3 @@ Pre-1.0 versions (0.x.x) may introduce breaking changes in minor versions as the
 Distributed under the Apache 2.0 License. See [LICENSE](LICENSE) for more information.
 
 Project Link: [https://github.com/cisco-ai-defense/pickle-fuzzer](https://github.com/cisco-ai-defense/pickle-fuzzer)
-

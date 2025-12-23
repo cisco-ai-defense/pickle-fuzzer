@@ -1,0 +1,133 @@
+name: pickle-fuzzer
+description: Install and run the pickle-fuzzer CLI to generate pickle bytecode.
+author: Cisco AI Defense
+
+inputs:
+  mode:
+    description: Mode to run: "cli" (default) or "atheris".
+    required: false
+    default: "cli"
+  version:
+    description: >
+      Release tag to download (e.g., v1.2.3). Defaults to the action ref if it
+      looks like a tag; otherwise uses the latest release.
+    required: false
+    default: ""
+  args:
+    description: >
+      Arguments passed directly to pickle-fuzzer. If set, other inputs are
+      ignored.
+    required: false
+    default: ""
+  output_dir:
+    description: Output directory for batch generation (maps to --dir).
+    required: false
+    default: ""
+  output_file:
+    description: Output file path for single file mode (positional FILE).
+    required: false
+    default: ""
+  samples:
+    description: Number of samples to generate (maps to --samples).
+    required: false
+    default: ""
+  protocol:
+    description: Pickle protocol version 0-5 (maps to --protocol).
+    required: false
+    default: ""
+  seed:
+    description: Seed for reproducible generation (maps to --seed).
+    required: false
+    default: ""
+  min_opcodes:
+    description: Minimum opcodes to generate (maps to --min-opcodes).
+    required: false
+    default: ""
+  max_opcodes:
+    description: Maximum opcodes to generate (maps to --max-opcodes).
+    required: false
+    default: ""
+  mutators:
+    description: >
+      Comma or space separated mutators (maps to repeated --mutators flags).
+    required: false
+    default: ""
+  mutation_rate:
+    description: Mutation probability 0.0-1.0 (maps to --mutation-rate).
+    required: false
+    default: ""
+  unsafe_mutations:
+    description: Allow mutations that may produce invalid pickles.
+    required: false
+    default: "false"
+  allow_ext:
+    description: Allow EXT* opcodes (requires extension registry).
+    required: false
+    default: "false"
+  allow_buffer:
+    description: Allow buffer opcodes (requires out-of-band buffer support).
+    required: false
+    default: "false"
+  install_only:
+    description: Only install pickle-fuzzer without running it.
+    required: false
+    default: "false"
+  python_version:
+    description: Python version for atheris mode.
+    required: false
+    default: "3.11"
+  harness:
+    description: Path to the Atheris harness script (required for atheris mode).
+    required: false
+    default: ""
+  harness_args:
+    description: Arguments passed to the harness script (atheris mode).
+    required: false
+    default: ""
+
+outputs:
+  binary-path:
+    description: Path to the installed pickle-fuzzer binary.
+    value: ${{ steps.install.outputs.binary-path }}
+  resolved-version:
+    description: Version tag resolved for download.
+    value: ${{ steps.install.outputs.resolved-version }}
+
+runs:
+  using: composite
+  steps:
+    - name: Validate mode
+      shell: bash
+      run: |
+        case "${{ inputs.mode }}" in
+          cli|atheris) ;;
+          *) echo "Unsupported mode: ${{ inputs.mode }}" >&2; exit 1 ;;
+        esac
+
+    - id: install
+      if: ${{ inputs.mode == 'cli' }}
+      shell: bash
+      run: |
+        "${GITHUB_ACTION_PATH}/scripts/action-install.sh"
+
+    - name: Run pickle-fuzzer
+      if: ${{ inputs.mode == 'cli' && inputs.install_only != 'true' && inputs.install_only != '1' && inputs.install_only != 'yes' }}
+      shell: bash
+      run: |
+        "${GITHUB_ACTION_PATH}/scripts/action-run.sh"
+
+    - name: Setup Python (atheris)
+      if: ${{ inputs.mode == 'atheris' }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python_version }}
+
+    - name: Install Rust toolchain (atheris)
+      if: ${{ inputs.mode == 'atheris' }}
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Run Atheris harness
+      if: ${{ inputs.mode == 'atheris' }}
+      shell: bash
+      run: |
+        "${GITHUB_ACTION_PATH}/scripts/action-atheris.sh"
