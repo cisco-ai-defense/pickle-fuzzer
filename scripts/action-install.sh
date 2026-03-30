@@ -3,6 +3,7 @@ set -euo pipefail
 
 repo="cisco-ai-defense/pickle-fuzzer"
 
+binary_path_input="${INPUT_BINARY_PATH:-}"
 version_input="${INPUT_VERSION:-}"
 action_ref="${GITHUB_ACTION_REF:-}"
 
@@ -10,7 +11,14 @@ is_safe_release_tag() {
   [[ "$1" =~ ^v[0-9A-Za-z][0-9A-Za-z._+-]*$ ]]
 }
 
-if [[ -n "$version_input" ]]; then
+if [[ -n "$binary_path_input" && -n "$version_input" ]]; then
+  echo "version and binary_path are mutually exclusive." >&2
+  exit 1
+fi
+
+if [[ -n "$binary_path_input" ]]; then
+  version="local"
+elif [[ -n "$version_input" ]]; then
   version="$version_input"
   version_source="inputs.version"
 elif [[ -n "$action_ref" && ( "$action_ref" == v* || "$action_ref" == refs/tags/v* ) ]]; then
@@ -27,7 +35,7 @@ else
   exit 1
 fi
 
-if [[ "$version" != "latest" ]] && ! is_safe_release_tag "$version"; then
+if [[ "$version" != "latest" && "$version" != "local" ]] && ! is_safe_release_tag "$version"; then
   echo "Unsupported release tag from ${version_source}: ${version}" >&2
   echo "Expected a release tag like v1, v1.2.3, or v1.2.3-rc1." >&2
   exit 1
@@ -96,10 +104,29 @@ else
 fi
 mkdir -p "$install_dir"
 
-url="https://github.com/${repo}/releases/download/${version}/${asset}"
+if [[ -n "$binary_path_input" ]]; then
+  local_binary_path="$binary_path_input"
+  if [[ "$os" == "Windows" ]]; then
+    if command -v cygpath >/dev/null 2>&1 && [[ "$binary_path_input" =~ ^[A-Za-z]:[\\/] ]]; then
+      local_binary_path="$(cygpath -u "$binary_path_input")"
+    else
+      local_binary_path="${binary_path_input//\\//}"
+    fi
+  fi
 
-echo "Downloading ${url}"
-curl -fsSL -o "${install_dir}/${bin_name}" "$url"
+  if [[ ! -f "$local_binary_path" ]]; then
+    echo "Local binary not found: ${binary_path_input}" >&2
+    exit 1
+  fi
+
+  echo "Installing local binary ${binary_path_input}"
+  cp "$local_binary_path" "${install_dir}/${bin_name}"
+else
+  url="https://github.com/${repo}/releases/download/${version}/${asset}"
+
+  echo "Downloading ${url}"
+  curl -fsSL -o "${install_dir}/${bin_name}" "$url"
+fi
 
 chmod +x "${install_dir}/${bin_name}"
 

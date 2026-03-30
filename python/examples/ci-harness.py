@@ -17,14 +17,31 @@
 import sys
 
 import atheris
-from pickle_fuzzer.fuzzer import PickleMutator
+from pickle_fuzzer import Generator
 
 with atheris.instrument_imports():
     import pickletools
 
 MAX_INPUT_BYTES = 4096
-MAX_PICKLE_BYTES = 256
-MUTATORS = [PickleMutator(protocol=proto) for proto in range(6)]
+PROTOCOLS = 6
+
+
+def validate_pickle(pickle_bytes: bytes) -> None:
+    last_opcode = None
+    last_pos = None
+
+    for last_opcode, _arg, last_pos in pickletools.genops(pickle_bytes):
+        pass
+
+    if last_opcode is None or last_pos is None:
+        raise ValueError("generated pickle did not contain any opcodes")
+
+    if last_opcode.name != "STOP":
+        raise ValueError(f"generated pickle terminated with {last_opcode.name} instead of STOP")
+
+    if last_pos != len(pickle_bytes) - 1:
+        trailing = len(pickle_bytes) - last_pos - 1
+        raise ValueError(f"generated pickle has {trailing} trailing byte(s) after STOP")
 
 
 @atheris.instrument_func
@@ -33,13 +50,9 @@ def TestOneInput(data: bytes) -> None:
         return
     if len(data) > MAX_INPUT_BYTES:
         data = data[:MAX_INPUT_BYTES]
-    proto = data[0] % len(MUTATORS)
-    pickle_bytes = MUTATORS[proto].mutate(data[1:], max_size=MAX_PICKLE_BYTES)
-    try:
-        for _ in pickletools.genops(pickle_bytes):
-            pass
-    except Exception:
-        pass
+    proto = data[0] % PROTOCOLS
+    pickle_bytes = Generator(protocol=proto).generate_from_bytes(data[1:])
+    validate_pickle(pickle_bytes)
 
 
 def main() -> None:
