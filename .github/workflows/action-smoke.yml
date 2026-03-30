@@ -13,6 +13,8 @@ jobs:
   smoke:
     name: Action Smoke Test (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
+    env:
+      ACTION_VERSION: ${{ github.event.inputs.version || 'latest' }}
     strategy:
       fail-fast: false
       matrix:
@@ -27,7 +29,7 @@ jobs:
       - name: Install pickle-fuzzer
         uses: ./
         with:
-          version: ${{ inputs.version }}
+          version: ${{ env.ACTION_VERSION }}
           mode: cli
           install_only: true
 
@@ -37,7 +39,7 @@ jobs:
       - name: Generate samples
         uses: ./
         with:
-          version: ${{ inputs.version }}
+          version: ${{ env.ACTION_VERSION }}
           mode: cli
           output_dir: samples
           samples: 5

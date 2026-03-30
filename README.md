@@ -81,7 +81,9 @@ You can also pass raw arguments via `args`, which overrides other inputs:
 ```
 
 Set `version` to download a specific release tag, or `install_only: true` to
-just add the binary to `PATH` without running it.
+just add the binary to `PATH` without running it. When you pin the action to a
+branch, commit SHA, or local checkout, set `version` explicitly; the action
+does not fall back to `latest` unless you opt into that mutable release.
 
 To run a custom Atheris harness (see `python/examples/harness.py` for a starter
 template), use `mode: atheris` and provide a harness path:
@@ -93,6 +95,8 @@ template), use `mode: atheris` and provide a harness path:
     harness: fuzz_harness.py
     harness_args: "-max_total_time=60"
 ```
+
+`harness_args` is split on shell whitespace before being passed to the harness.
 
 ## Usage
 
