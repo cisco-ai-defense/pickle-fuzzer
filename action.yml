@@ -10,7 +10,8 @@ inputs:
   version:
     description: >
       Release tag to download (e.g., v1.2.3). Defaults to the action ref if it
-      looks like a tag; otherwise uses the latest release.
+      looks like a tag. For branch, SHA, or local checkouts, set this
+      explicitly; use latest only if you want a mutable release.
     required: false
     default: ""
   args:
@@ -81,7 +82,7 @@ inputs:
     required: false
     default: ""
   harness_args:
-    description: Arguments passed to the harness script (atheris mode).
+    description: Whitespace-delimited arguments passed to the harness script (atheris mode).
     required: false
     default: ""
 
@@ -97,11 +98,13 @@ runs:
   using: composite
   steps:
     - name: Validate mode
+      env:
+        INPUT_MODE: ${{ inputs.mode }}
       shell: bash
       run: |
-        case "${{ inputs.mode }}" in
+        case "$INPUT_MODE" in
           cli|atheris) ;;
-          *) echo "Unsupported mode: ${{ inputs.mode }}" >&2; exit 1 ;;
+          *) echo "Unsupported mode: $INPUT_MODE" >&2; exit 1 ;;
         esac
 
     - id: install
@@ -150,13 +153,15 @@ runs:
 
     - name: Setup Python (atheris)
       if: ${{ inputs.mode == 'atheris' }}
-      uses: actions/setup-python@v5
+      uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
       with:
         python-version: ${{ inputs.python_version }}
 
     - name: Install Rust toolchain (atheris)
       if: ${{ inputs.mode == 'atheris' }}
-      uses: dtolnay/rust-toolchain@stable
+      uses: dtolnay/rust-toolchain@631a55b12751854ce901bb631d5902ceb48146f7
+      with:
+        toolchain: stable
 
     - name: Run Atheris harness
       if: ${{ inputs.mode == 'atheris' }}

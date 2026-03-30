@@ -2,16 +2,53 @@
 set -euo pipefail
 
 repo="cisco-ai-defense/pickle-fuzzer"
+signer_workflow="${repo}/.github/workflows/release.yml"
 
 version_input="${INPUT_VERSION:-}"
 action_ref="${GITHUB_ACTION_REF:-}"
 
+is_safe_release_tag() {
+  [[ "$1" =~ ^v[0-9A-Za-z][0-9A-Za-z._+-]*$ ]]
+}
+
 if [[ -n "$version_input" ]]; then
   version="$version_input"
-elif [[ -n "$action_ref" && "$action_ref" == v* ]]; then
-  version="$action_ref"
+  version_source="inputs.version"
+elif [[ -n "$action_ref" && ( "$action_ref" == v* || "$action_ref" == refs/tags/v* ) ]]; then
+  version="${action_ref##refs/tags/}"
+  version_source="GITHUB_ACTION_REF"
 else
-  version="latest"
+  echo "INPUT_VERSION is required when the action ref is not a release tag." >&2
+  if [[ -n "$action_ref" ]]; then
+    echo "Received GITHUB_ACTION_REF=${action_ref}." >&2
+  else
+    echo "Received an empty GITHUB_ACTION_REF (for example from a local checkout)." >&2
+  fi
+  echo "Set the action version input to an immutable release tag such as v1.2.3, or explicitly set it to latest if you accept a mutable release." >&2
+  exit 1
+fi
+
+if [[ "$version" != "latest" ]] && ! is_safe_release_tag "$version"; then
+  echo "Unsupported release tag from ${version_source}: ${version}" >&2
+  echo "Expected a release tag like v1, v1.2.3, or v1.2.3-rc1." >&2
+  exit 1
+fi
+
+if ! command -v gh >/dev/null 2>&1; then
+  echo "GitHub CLI is required to resolve and verify release provenance." >&2
+  exit 1
+fi
+
+if [[ "$version" == "latest" ]]; then
+  version="$(gh release view --repo "${repo}" --json tagName --jq '.tagName')"
+  if [[ -z "$version" ]]; then
+    echo "Failed to resolve the latest release tag for ${repo}." >&2
+    exit 1
+  fi
+  if ! is_safe_release_tag "$version"; then
+    echo "Resolved latest release tag is invalid: ${version}" >&2
+    exit 1
+  fi
 fi
 
 os="${RUNNER_OS:-}"
@@ -61,52 +98,22 @@ else
 fi
 mkdir -p "$install_dir"
 
-if [[ "$version" == "latest" ]]; then
-  url="https://github.com/${repo}/releases/latest/download/${asset}"
-  checksum_url="https://github.com/${repo}/releases/latest/download/${asset}.sha256"
-else
-  url="https://github.com/${repo}/releases/download/${version}/${asset}"
-  checksum_url="https://github.com/${repo}/releases/download/${version}/${asset}.sha256"
-fi
+url="https://github.com/${repo}/releases/download/${version}/${asset}"
 
 echo "Downloading ${url}"
 curl -fsSL -o "${install_dir}/${bin_name}" "$url"
 
-checksum_path="${install_dir}/${asset}.sha256"
-echo "Downloading ${checksum_url}"
-curl -fsSL -o "${checksum_path}" "$checksum_url"
+verify_args=(
+  attestation verify
+  "${install_dir}/${bin_name}"
+  --repo "${repo}"
+  --signer-workflow "${signer_workflow}"
+  --source-ref "refs/tags/${version}"
+)
 
-expected_checksum="$(awk '{print $1}' "$checksum_path" | tr '[:upper:]' '[:lower:]')"
-if [[ -z "$expected_checksum" ]]; then
-  echo "Checksum file is empty or invalid: ${checksum_path}" >&2
-  exit 1
-fi
-
-if command -v sha256sum >/dev/null 2>&1; then
-  actual_checksum="$(sha256sum "${install_dir}/${bin_name}" | awk '{print $1}')"
-elif command -v shasum >/dev/null 2>&1; then
-  actual_checksum="$(shasum -a 256 "${install_dir}/${bin_name}" | awk '{print $1}')"
-elif command -v certutil >/dev/null 2>&1; then
-  file_native="${install_dir}/${bin_name}"
-  if command -v cygpath >/dev/null 2>&1; then
-    file_native="$(cygpath -w "${install_dir}/${bin_name}")"
-  fi
-  actual_checksum="$(certutil -hashfile "$file_native" SHA256 | awk 'NR==2 {print tolower($1)}')"
-else
-  echo "No SHA-256 tool available to verify checksum." >&2
-  exit 1
-fi
-
-actual_checksum="$(echo "$actual_checksum" | tr '[:upper:]' '[:lower:]')"
-if [[ -z "$actual_checksum" ]]; then
-  echo "Failed to compute SHA-256 checksum." >&2
-  exit 1
-fi
-
-if [[ "$expected_checksum" != "$actual_checksum" ]]; then
-  echo "Checksum mismatch for ${bin_name}." >&2
-  echo "Expected: ${expected_checksum}" >&2
-  echo "Actual:   ${actual_checksum}" >&2
+echo "Verifying release provenance for ${bin_name}"
+if ! gh "${verify_args[@]}" >/dev/null; then
+  echo "Failed to verify GitHub release provenance for ${bin_name}." >&2
   exit 1
 fi
 
