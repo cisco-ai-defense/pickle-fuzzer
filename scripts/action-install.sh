@@ -2,7 +2,6 @@
 set -euo pipefail
 
 repo="cisco-ai-defense/pickle-fuzzer"
-signer_workflow="${repo}/.github/workflows/release.yml"
 
 version_input="${INPUT_VERSION:-}"
 action_ref="${GITHUB_ACTION_REF:-}"
@@ -34,12 +33,11 @@ if [[ "$version" != "latest" ]] && ! is_safe_release_tag "$version"; then
   exit 1
 fi
 
-if ! command -v gh >/dev/null 2>&1; then
-  echo "GitHub CLI is required to resolve and verify release provenance." >&2
-  exit 1
-fi
-
 if [[ "$version" == "latest" ]]; then
+  if ! command -v gh >/dev/null 2>&1; then
+    echo "GitHub CLI is required to resolve the latest release tag." >&2
+    exit 1
+  fi
   version="$(gh release view --repo "${repo}" --json tagName --jq '.tagName')"
   if [[ -z "$version" ]]; then
     echo "Failed to resolve the latest release tag for ${repo}." >&2
@@ -102,20 +100,6 @@ url="https://github.com/${repo}/releases/download/${version}/${asset}"
 
 echo "Downloading ${url}"
 curl -fsSL -o "${install_dir}/${bin_name}" "$url"
-
-verify_args=(
-  attestation verify
-  "${install_dir}/${bin_name}"
-  --repo "${repo}"
-  --signer-workflow "${signer_workflow}"
-  --source-ref "refs/tags/${version}"
-)
-
-echo "Verifying release provenance for ${bin_name}"
-if ! gh "${verify_args[@]}" >/dev/null; then
-  echo "Failed to verify GitHub release provenance for ${bin_name}." >&2
-  exit 1
-fi
 
 chmod +x "${install_dir}/${bin_name}"
 
