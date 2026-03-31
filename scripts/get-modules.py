@@ -14,23 +14,25 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""Comprehensive stdlib discovery that collects EVERYTHING.
+"""Build stdlib GLOBAL targets for the generator catalog.
 
-This script imports all stdlib modules and introspects them to collect:
-- All module names (including submodules)
-- All functions, classes, constants, and other attributes
-- All methods and attributes of classes
+The generator emits ``GLOBAL`` and ``INST`` operands as ``module\\nname\\n``.
+This script therefore discovers stdlib modules and records only module/member
+pairs that this lookup form can resolve. Package discovery uses filesystem
+enumeration so the builder does not import package trees just to discover
+submodules.
 
-Outputs a flat, line-separated file for easy random access.
+Entries are stored as ``module<TAB>member`` in ``data/stdlib_complete.txt``.
 """
 
 from __future__ import annotations
 
-import sys
 import importlib
+import importlib.util
+import os
 import pkgutil
-import inspect
-from typing import Set
+import sys
+from pathlib import Path
 
 # Configuration
 # Modules with side effects or that are slow/problematic to introspect
@@ -51,48 +53,96 @@ SKIP_INTROSPECT = {
     "lib2to3",  # Large parsing library - slow
 }
 
-OUTPUT_FILE = "../data/stdlib_complete.txt"
+ENTRY_SEPARATOR = "\t"
+OUTPUT_FILE = Path(__file__).resolve().parent.parent / "data" / "stdlib_complete.txt"
 
 
-def get_all_module_names() -> Set[str]:
-    """Collect all stdlib module names including submodules."""
+def get_stdlib_base_module_names() -> set[str]:
+    """Return the complete stdlib module surface for supported interpreters."""
+    stdlib_base = getattr(sys, "stdlib_module_names", None)
+    if stdlib_base is None:
+        raise RuntimeError(
+            "scripts/get-modules.py requires Python with sys.stdlib_module_names "
+            "(Python 3.10+; project pin is 3.11.x). Refusing to fall back to "
+            "sys.builtin_module_names because it omits most of the standard library."
+        )
+    return set(stdlib_base)
+
+
+def should_skip_introspection(module_name: str) -> bool:
+    """Return whether a module or package tree should be left uninterpreted."""
+    for skip_prefix in SKIP_INTROSPECT:
+        if module_name == skip_prefix or module_name.startswith(skip_prefix + "."):
+            return True
+    return False
+
+
+def get_package_submodule_names(package_name: str) -> set[str]:
+    """Discover submodules without importing the package tree."""
+    try:
+        spec = importlib.util.find_spec(package_name)
+    except (AttributeError, ImportError, ValueError):
+        return set()
+
+    if spec is None or spec.submodule_search_locations is None:
+        return set()
+
     all_names = set()
+    pending = [(package_name, [os.fspath(path) for path in spec.submodule_search_locations])]
+    visited = set()
 
-    # Get base stdlib modules
-    if hasattr(sys, "stdlib_module_names"):
-        stdlib_base = sys.stdlib_module_names
-    else:
-        # Fallback for older Python
-        stdlib_base = sys.builtin_module_names
+    while pending:
+        current_name, current_paths = pending.pop()
+        visit_key = (current_name, tuple(sorted(current_paths)))
+        if visit_key in visited:
+            continue
+        visited.add(visit_key)
 
-    for mod_name in stdlib_base:
-        if mod_name in SKIP_IMPORT:
-            all_names.add(mod_name)
+        try:
+            discovered = list(
+                pkgutil.iter_modules(current_paths, prefix=current_name + ".")
+            )
+        except Exception:
             continue
 
-        all_names.add(mod_name)
+        for module_info in discovered:
+            all_names.add(module_info.name)
+            if not module_info.ispkg or should_skip_introspection(module_info.name):
+                continue
 
-        # Try to import and walk submodules
-        try:
-            mod = importlib.import_module(mod_name)
-            if hasattr(mod, '__path__'):
-                # It's a package, walk submodules
-                try:
-                    for _, submod_name, _ in pkgutil.walk_packages(
-                        mod.__path__,
-                        prefix=mod_name + "."
-                    ):
-                        all_names.add(submod_name)
-                except Exception:
-                    pass  # Some packages can't be walked
-        except Exception:
-            pass  # Can't import, but we have the name
+            child_name = module_info.name.rsplit(".", 1)[-1]
+            child_paths = []
+            for current_path in current_paths:
+                child_path = os.path.join(current_path, child_name)
+                if os.path.isdir(child_path):
+                    child_paths.append(child_path)
+            if child_paths:
+                pending.append((module_info.name, child_paths))
 
     return all_names
 
 
-def get_module_members(module_name: str) -> Set[str]:
-    """Introspect a module to get all its members (functions, classes, etc.)."""
+def get_all_module_names() -> set[str]:
+    """Collect stdlib modules and submodules safe to introspect."""
+    all_names = set()
+
+    for mod_name in get_stdlib_base_module_names():
+        if mod_name in SKIP_IMPORT or should_skip_introspection(mod_name):
+            continue
+
+        all_names.add(mod_name)
+        all_names.update(get_package_submodule_names(mod_name))
+
+    return all_names
+
+
+def format_catalog_entry(module_name: str, attr_name: str) -> str:
+    """Encode a module/member pair without ambiguity for nested module paths."""
+    return f"{module_name}{ENTRY_SEPARATOR}{attr_name}"
+
+
+def get_module_members(module_name: str) -> set[str]:
+    """Collect public module-level members usable as GLOBAL targets."""
     members = set()
 
     if module_name in SKIP_IMPORT:
@@ -102,75 +152,47 @@ def get_module_members(module_name: str) -> Set[str]:
     if "__main__" in module_name:
         return members
 
-    # Skip modules/packages that are problematic to introspect
-    for skip_prefix in SKIP_INTROSPECT:
-        if module_name == skip_prefix or module_name.startswith(skip_prefix + "."):
-            return members
+    if should_skip_introspection(module_name):
+        return members
 
     try:
         mod = importlib.import_module(module_name)
     except Exception:
         return members
 
-    # Get all public attributes
     try:
         all_attrs = dir(mod)
     except Exception:
         return members
 
     for attr_name in all_attrs:
-        # Skip dunder methods/attrs 
-        if attr_name.startswith('__') and attr_name.endswith('__'):
+        if attr_name.startswith("__") and attr_name.endswith("__"):
             continue
 
         try:
-            attr = getattr(mod, attr_name)
+            getattr(mod, attr_name)
         except Exception:
             continue
 
-        # Add the attribute itself (function, class, constant, etc.)
-        full_name = f"{module_name}.{attr_name}"
-        members.add(full_name)
-
-        # If it's a class, introspect it for methods and attributes
-        if inspect.isclass(attr):
-            try:
-                class_attrs = dir(attr)
-
-                for class_attr_name in class_attrs:
-                    # Skip dunder methods
-                    if class_attr_name.startswith('__') and class_attr_name.endswith('__'):
-                        continue
-                    try:
-                        # class_full_name = f"{module_name}.{attr_name}.{class_attr_name}"
-                        class_full_name = f"{module_name}.{attr_name}"
-                        members.add(class_full_name)
-                    except Exception:
-                        continue
-            except Exception:
-                pass
+        # GLOBAL/INST resolve module-level names only; nested class members do not.
+        members.add(format_catalog_entry(module_name, attr_name))
 
     return members
 
 
-def main():
+def main() -> None:
     print("Collecting all stdlib module names...")
     all_modules = get_all_module_names()
     print(f"Found {len(all_modules)} modules")
 
-    print("\nIntrospecting modules for all members...")
+    print("\nIntrospecting modules for GLOBAL-resolvable members...")
     all_items = set()
 
-    # Add all module names
-    all_items.update(all_modules)
-
-    # Process each module
     total = len(all_modules)
     for idx, mod_name in enumerate(sorted(all_modules), 1):
         if idx % 50 == 0 or idx > 500:
             print(f"  Processed {idx}/{total} modules... (current: {mod_name})")
 
-        # Add timeout protection for slow modules
         try:
             members = get_module_members(mod_name)
             all_items.update(members)
@@ -179,11 +201,10 @@ def main():
 
     print(f"\nCollected {len(all_items)} total items")
 
-    # Write to flat file
     print(f"Writing to {OUTPUT_FILE}...")
-    with open(OUTPUT_FILE, 'w') as f:
+    with OUTPUT_FILE.open("w", encoding="utf-8") as f:
         for item in sorted(all_items):
-            if '__main__' in item:
+            if "__main__" in item:
                 continue
             f.write(f"{item}\n")
 

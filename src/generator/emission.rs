@@ -54,12 +54,24 @@ use super::Generator;
 use super::Version;
 use crate::opcodes::{OpcodeKind, PICKLE_OPCODES};
 
-static STDLIB_MODULES: OnceLock<Vec<String>> = OnceLock::new();
+static STDLIB_GLOBALS: OnceLock<Vec<(String, String)>> = OnceLock::new();
 
-fn load_stdlib_complete() -> &'static Vec<String> {
-    STDLIB_MODULES.get_or_init(|| {
+fn parse_stdlib_global(line: &str) -> Option<(String, String)> {
+    let (module, attr) = line.split_once('\t')?;
+    if module.is_empty() || attr.is_empty() {
+        return None;
+    }
+    Some((module.to_string(), attr.to_string()))
+}
+
+fn normalize_ext4_code(code: u32) -> u32 {
+    (code & 0x7FFF_FFFF).max(1)
+}
+
+fn load_stdlib_complete() -> &'static Vec<(String, String)> {
+    STDLIB_GLOBALS.get_or_init(|| {
         let content = include_str!("../../data/stdlib_complete.txt");
-        content.lines().map(|s| s.to_string()).collect()
+        content.lines().filter_map(parse_stdlib_global).collect()
     })
 }
 
@@ -247,9 +259,13 @@ impl Generator {
             }
             Ext4 => {
                 // ext4: 4-byte signed integer, must be > 0
-                // use u32 and ensure it's positive
-                let code = source.gen_u32().saturating_add(1);
-                debug_assert!(code > 0, "EXT4 code must be > 0, got {}", code);
+                // clear the sign bit and remap zero so the encoded value stays in 1..=i32::MAX
+                let code = normalize_ext4_code(source.gen_u32());
+                debug_assert!(
+                    (1..=i32::MAX as u32).contains(&code),
+                    "EXT4 code out of range: {}",
+                    code
+                );
                 self.output.push(Ext4.as_u8());
                 self.output.extend_from_slice(&code.to_le_bytes());
                 self.process_stack_ops(Ext4, Some(&code.to_le_bytes()));
@@ -491,11 +507,11 @@ impl Generator {
         self.state.proto_emitted = true;
     }
 
-    /// emit a GLOBAL opcode with a random module and class name.
+    /// emit a GLOBAL opcode with a random module and name.
     ///
-    /// selects a random Python standard library module and class from the embedded
+    /// selects a random Python standard library module/member pair from the embedded
     /// `stdlib_complete.txt` data. emits the GLOBAL opcode followed by two newline-terminated
-    /// strings: module name and class name.
+    /// strings: module name and member name.
     ///
     /// # Parameters
     /// - `source`: entropy source for random module selection
@@ -608,26 +624,57 @@ impl Generator {
         Ok(())
     }
 
-    /// get a random module and class name from the Python standard library.
+    /// get a random module and name from the Python standard library.
     ///
     /// uses embedded `stdlib_complete.txt` data (cached after first access) which contains
-    /// lines in the format "module.class", randomly selects one, and formats it as
-    /// "module\nclass\n" for use with GLOBAL or INST opcodes.
+    /// lines in the format "module<TAB>name", randomly selects one, and formats it as
+    /// "module\nname\n" for use with GLOBAL or INST opcodes.
     ///
     /// # Parameters
     /// - `source`: entropy source for random selection
     ///
     /// # Returns
-    /// a string formatted as "module\nclass\n".
+    /// a string formatted as "module\nname\n".
     pub(super) fn get_random_module(&self, source: &mut GenerationSource) -> Result<String> {
-        let modules = load_stdlib_complete();
-        let idx = source.choose_index(modules.len());
-        let chosen = &modules[idx];
+        let globals = load_stdlib_complete();
+        if globals.is_empty() {
+            return Err(eyre!(
+                "stdlib_complete.txt does not contain any global references"
+            ));
+        }
 
-        let mut iter = chosen.splitn(2, '.');
-        let module = iter.next().unwrap_or("builtins");
-        let attr = iter.next().unwrap_or("object");
+        let idx = source.choose_index(globals.len());
+        let (module, attr) = &globals[idx];
 
         Ok(format!("{}\n{}\n", module, attr))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::normalize_ext4_code;
+    use super::parse_stdlib_global;
+
+    #[test]
+    fn parse_stdlib_global_accepts_tab_delimited_entries() {
+        let parsed = parse_stdlib_global("xml.etree.ElementTree\tComment");
+        assert_eq!(
+            parsed,
+            Some(("xml.etree.ElementTree".to_string(), "Comment".to_string()))
+        );
+    }
+
+    #[test]
+    fn parse_stdlib_global_rejects_bare_and_legacy_dotted_entries() {
+        assert_eq!(parse_stdlib_global("antigravity"), None);
+        assert_eq!(parse_stdlib_global("xml.etree.ElementTree.Comment"), None);
+    }
+
+    #[test]
+    fn normalize_ext4_code_stays_in_positive_signed_range() {
+        assert_eq!(normalize_ext4_code(0), 1);
+        assert_eq!(normalize_ext4_code(1), 1);
+        assert_eq!(normalize_ext4_code(0x8000_0000), 1);
+        assert_eq!(normalize_ext4_code(u32::MAX), i32::MAX as u32);
     }
 }
