@@ -573,9 +573,7 @@ Given a version number `MAJOR.MINOR.PATCH`:
 - **MINOR**: Backwards-compatible new functionality
 - **PATCH**: Backwards-compatible bug fixes
 
-**Current version**: 0.1.0 (pre-release)
-
-Pre-1.0 versions (0.x.x) may introduce breaking changes in minor versions as the API stabilizes.
+**Current version**: 1.0.1
 
 ## License
 

@@ -338,9 +338,9 @@ Ensure all checks pass locally before pushing.
 1. Update version in `Cargo.toml` and `pyproject.toml`
 2. Update `CHANGELOG.md`
 3. Run full test suite
-4. Create git tag: `git tag -a v0.x.0 -m "Release v0.x.0"`
-5. Push tag: `git push origin v0.x.0`
-6. CI will automatically build and publish
+4. Create git tag: `git tag -a vX.Y.Z -m "Release vX.Y.Z"`
+5. Push tag: `git push origin vX.Y.Z`
+6. The GitHub release workflow will create or update the GitHub Release, build release binaries, attach checksums, and publish build attestations
 
 ## Getting Help
 
