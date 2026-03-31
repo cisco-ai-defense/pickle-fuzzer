@@ -200,8 +200,8 @@ impl Generator {
                 }
             }
 
-            // BinPersID needs 1 item on stack
-            BinPersID => self.state.stack.len() >= 1,
+            // persistent-id opcodes require unpickler-side persistent_load support
+            BinPersID => self.allow_persistent_id_opcodes && self.state.stack.len() >= 1,
 
             // proto should only be emitted once at the start
             Proto => !self.state.proto_emitted,
@@ -213,8 +213,9 @@ impl Generator {
             None | NewTrue | NewFalse | Int | Long | Long1 | Long4 | BinInt | BinInt1 | BinInt2
             | Float | BinFloat | String | BinString | ShortBinString | Unicode
             | ShortBinUnicode | BinUnicode | BinUnicode8 | ShortBinBytes | BinBytes | BinBytes8
-            | ByteArray8 | EmptyList | EmptyDict | EmptyTuple | EmptySet | Global | PersID
-            | Mark => true,
+            | ByteArray8 | EmptyList | EmptyDict | EmptyTuple | EmptySet | Global | Mark => true,
+
+            PersID => self.allow_persistent_id_opcodes,
 
             // EXT* opcodes require a configured extension registry
             // allow only if explicitly enabled via with_ext_opcodes()

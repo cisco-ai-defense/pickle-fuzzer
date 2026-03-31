@@ -49,6 +49,19 @@ use super::mutators::Mutator;
 use super::protocol::Version;
 use super::state::State;
 
+const MAX_OPCODE_RANGE_BOUND: usize = 50_000;
+
+fn normalize_opcode_range(min: usize, max: usize) -> (usize, usize) {
+    let min = min.min(MAX_OPCODE_RANGE_BOUND);
+    let max = max.min(MAX_OPCODE_RANGE_BOUND);
+
+    if min <= max {
+        (min, max)
+    } else {
+        (max, min)
+    }
+}
+
 /// stateful pickle generator that produces valid pickle bytecode.
 ///
 /// the generator maintains a simulated pickle virtual machine (PVM) stack and memo
@@ -100,7 +113,7 @@ pub struct Generator {
     /// optional seed for the PRNG (if None, uses OS entropy)
     pub seed: Option<u64>,
 
-    /// buffer size for the PRNG (also limits the maximum pickle size)
+    /// maximum pickle size for generated output
     pub bufsize: Option<usize>,
 
     /// minimum number of opcodes to generate
@@ -123,6 +136,9 @@ pub struct Generator {
 
     /// allow NEXT_BUFFER/READONLY_BUFFER opcodes (requires out-of-band buffers)
     pub allow_buffer_opcodes: bool,
+
+    /// allow PERSID/BINPERSID opcodes (requires persistent_load support)
+    pub allow_persistent_id_opcodes: bool,
 }
 
 impl Default for Generator {
@@ -139,6 +155,7 @@ impl Default for Generator {
             unsafe_mutations: false,
             allow_ext_opcodes: false,
             allow_buffer_opcodes: false,
+            allow_persistent_id_opcodes: false,
         }
     }
 }
@@ -163,7 +180,8 @@ impl Generator {
     /// reset the generator state for generating a new pickle.
     ///
     /// clears the stack, memo, output buffer, and resets flags.
-    /// useful when reusing a generator for multiple pickle generation.
+    /// generation methods already reset automatically before each run, so this
+    /// is only needed when clearing state manually between operations.
     ///
     /// # Examples
     ///
@@ -189,7 +207,7 @@ impl Generator {
         self
     }
 
-    /// set a buffer size for the PRNG (limits maximum pickle size).
+    /// set a maximum pickle size for generated output.
     pub fn with_buffer_size(mut self, size: usize) -> Self {
         self.bufsize = Some(size);
         self
@@ -197,13 +215,19 @@ impl Generator {
 
     /// set the minimum number of opcodes to generate.
     pub fn with_min_opcodes(mut self, min: usize) -> Self {
-        self.min_opcodes = min;
+        self.min_opcodes = min.min(MAX_OPCODE_RANGE_BOUND);
+        if self.max_opcodes < self.min_opcodes {
+            self.max_opcodes = self.min_opcodes;
+        }
         self
     }
 
     /// set the maximum number of opcodes to generate.
     pub fn with_max_opcodes(mut self, max: usize) -> Self {
-        self.max_opcodes = max;
+        self.max_opcodes = max.min(MAX_OPCODE_RANGE_BOUND);
+        if self.min_opcodes > self.max_opcodes {
+            self.min_opcodes = self.max_opcodes;
+        }
         self
     }
 
@@ -218,9 +242,18 @@ impl Generator {
     ///     .with_opcode_range(10, 50);
     /// ```
     pub fn with_opcode_range(mut self, min: usize, max: usize) -> Self {
+        let (min, max) = normalize_opcode_range(min, max);
         self.min_opcodes = min;
         self.max_opcodes = max;
         self
+    }
+
+    /// update the opcode range in place.
+    pub fn set_opcode_range(&mut self, min: usize, max: usize) {
+        let (min, max) = normalize_opcode_range(min, max);
+        self.min_opcodes = min;
+        self.max_opcodes = max;
+        self.reset();
     }
 
     /// add mutators to the generator.
@@ -277,6 +310,81 @@ impl Generator {
         self
     }
 
+    /// allow PERSID/BINPERSID opcodes during generation.
+    ///
+    /// persistent-id opcodes require a persistent_load callback in the
+    /// unpickler. enable this only if your consumer is configured to resolve
+    /// persistent IDs.
+    pub fn with_persistent_id_opcodes(mut self, allow: bool) -> Self {
+        self.allow_persistent_id_opcodes = allow;
+        self
+    }
+
+    fn minimum_pickle_size(&self) -> usize {
+        let proto_size = if self.state.version >= Version::V2 {
+            2
+        } else {
+            0
+        };
+
+        proto_size + 2
+    }
+
+    fn generate_with_bufsize<F>(&mut self, max_size: usize, mut attempt: F) -> Result<Vec<u8>>
+    where
+        F: FnMut(&mut Self, Option<usize>, Option<bool>) -> Result<Vec<u8>>,
+    {
+        let minimum_size = self.minimum_pickle_size();
+        if max_size < minimum_size {
+            self.reset();
+            return Err(color_eyre::eyre::eyre!(
+                "buffer size {} is too small for protocol {} (minimum valid pickle size is {})",
+                max_size,
+                self.state.version as u8,
+                minimum_size
+            ));
+        }
+
+        let (_, max_budget) = self.normalized_opcode_range();
+        let mut last_error = None;
+
+        let mut frame_modes = vec![None];
+        if self.state.version >= Version::V4 {
+            frame_modes.push(Some(false));
+        }
+
+        for force_frame in frame_modes {
+            self.reset();
+            match attempt(self, None, force_frame) {
+                Ok(bytes) if bytes.len() <= max_size => return Ok(bytes),
+                Ok(_) => {}
+                Err(error) => last_error = Some(error),
+            }
+
+            for target_total in (0..=max_budget).rev() {
+                self.reset();
+                match attempt(self, Some(target_total), force_frame) {
+                    Ok(bytes) if bytes.len() <= max_size => return Ok(bytes),
+                    Ok(_) => {}
+                    Err(error) => last_error = Some(error),
+                }
+            }
+        }
+
+        self.reset();
+        match last_error {
+            Some(error) => Err(color_eyre::eyre::eyre!(
+                "failed to generate pickle within {} bytes: {}",
+                max_size,
+                error
+            )),
+            None => Err(color_eyre::eyre::eyre!(
+                "failed to generate pickle within {} bytes",
+                max_size
+            )),
+        }
+    }
+
     /// generate a random, but valid pickle opcode stream using PRNG.
     ///
     /// uses `rand` for entropy source. suitable for CLI and standalone use.
@@ -284,6 +392,24 @@ impl Generator {
     /// Returns the generated pickle bytecode. The pickle will be valid according
     /// to the protocol version specified when the generator was created.
     pub fn generate(&mut self) -> Result<Vec<u8>> {
+        self.reset();
+
+        if let Some(max_size) = self.bufsize {
+            let seed = self.seed;
+            return self.generate_with_bufsize(
+                max_size,
+                move |generator, target_total, force_frame| {
+                    let mut rng = if let Some(seed) = seed {
+                        ChaCha8Rng::seed_from_u64(seed)
+                    } else {
+                        ChaCha8Rng::from_os_rng()
+                    };
+                    let mut source = GenerationSource::Rand(&mut rng);
+                    generator.generate_internal(&mut source, target_total, force_frame)
+                },
+            );
+        }
+
         let mut rng = if let Some(seed) = self.seed {
             ChaCha8Rng::seed_from_u64(seed)
         } else {
@@ -292,7 +418,7 @@ impl Generator {
 
         let mut source = GenerationSource::Rand(&mut rng);
 
-        self.generate_internal(&mut source)
+        self.generate_internal(&mut source, None, None)
     }
 
     /// generate a pickle opcode stream from fuzzer-provided bytes.
@@ -310,8 +436,22 @@ impl Generator {
     /// let pickle = gen.generate_from_arbitrary(fuzzer_input).unwrap();
     /// ```
     pub fn generate_from_arbitrary(&mut self, data: &[u8]) -> Result<Vec<u8>> {
+        self.reset();
+
+        if let Some(max_size) = self.bufsize {
+            return self.generate_with_bufsize(max_size, |generator, target_total, force_frame| {
+                let mut u = Unstructured::new(data);
+                let mut source = GenerationSource::Arbitrary(&mut u);
+                generator.generate_internal(&mut source, target_total, force_frame)
+            });
+        }
+
         let mut u = Unstructured::new(data);
         let mut source = GenerationSource::Arbitrary(&mut u);
-        self.generate_internal(&mut source)
+        self.generate_internal(&mut source, None, None)
+    }
+
+    pub(crate) fn normalized_opcode_range(&self) -> (usize, usize) {
+        normalize_opcode_range(self.min_opcodes, self.max_opcodes)
     }
 }

@@ -14,16 +14,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use clap::Parser;
 use color_eyre::Result;
 use pickle_fuzzer::{Cli, Generator, Version};
 use rand::Rng;
 use rayon::prelude::*;
 
+fn batch_sample_seed(seed: u64, idx: usize) -> u64 {
+    seed.wrapping_add(idx as u64)
+}
+
 fn main() -> Result<()> {
     color_eyre::install()?;
 
-    let args = Cli::parse();
+    let args = Cli::parse_args();
 
     // Expand "all" meta-option and create mutators
     let mutator_kinds: Vec<pickle_fuzzer::MutatorKind> =
@@ -70,7 +73,8 @@ fn main() -> Result<()> {
         // apply EXT and buffer opcode flags
         generator = generator
             .with_ext_opcodes(args.allow_ext)
-            .with_buffer_opcodes(args.allow_buffer);
+            .with_buffer_opcodes(args.allow_buffer)
+            .with_persistent_id_opcodes(args.allow_persistent_ids);
 
         let bytecode = generator.generate()?;
         std::fs::write(&file, &bytecode)?;
@@ -89,16 +93,18 @@ fn main() -> Result<()> {
         let unsafe_mutations = args.unsafe_mutations;
         let allow_ext_opcodes = args.allow_ext;
         let allow_buffer_opcodes = args.allow_buffer;
+        let allow_persistent_id_opcodes = args.allow_persistent_ids;
         let mutator_kinds_for_batch = mutator_kinds.clone();
 
         let errors: Vec<_> = (0..args.samples)
             .into_par_iter()
             .filter_map(|idx| {
+                let sample_seed = seed.map(|seed| batch_sample_seed(seed, idx));
                 let version = if let Some(proto) = protocol {
                     // same version selection logic as what's used above
                     Version::try_from(proto).unwrap_or(Version::V3)
-                } else if let Some(seed) = seed {
-                    Version::try_from((seed % 6) as usize).unwrap_or(Version::V3)
+                } else if let Some(sample_seed) = sample_seed {
+                    Version::try_from((sample_seed % 6) as usize).unwrap_or(Version::V3)
                 } else {
                     Version::try_from(rand::rng().random_range(0..=5)).unwrap_or(Version::V3)
                 };
@@ -106,8 +112,8 @@ fn main() -> Result<()> {
                 let mut generator =
                     Generator::new(version).with_opcode_range(min_opcodes, max_opcodes);
 
-                if let Some(s) = seed {
-                    generator = generator.with_seed(s);
+                if let Some(sample_seed) = sample_seed {
+                    generator = generator.with_seed(sample_seed);
                 }
 
                 // Create mutators for this thread
@@ -126,7 +132,8 @@ fn main() -> Result<()> {
                 // apply EXT and buffer opcode flags
                 generator = generator
                     .with_ext_opcodes(allow_ext_opcodes)
-                    .with_buffer_opcodes(allow_buffer_opcodes);
+                    .with_buffer_opcodes(allow_buffer_opcodes)
+                    .with_persistent_id_opcodes(allow_persistent_id_opcodes);
 
                 let bytecode = match generator.generate() {
                     Ok(b) => b,

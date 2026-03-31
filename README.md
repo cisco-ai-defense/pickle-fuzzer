@@ -23,7 +23,7 @@ A structure-aware test case generator for Python pickle parsers and validators. 
 - **Comprehensive Opcode Coverage**: Supports all standard pickle opcodes including FRAME, EXT, GLOBAL, etc.
 - **Parallel Generation**: Generate multiple pickle files concurrently
 - **Configurable Output**: Single file or batch generation modes
-- **Deterministic Fuzzing**: Optional seed-based generation for reproducibility
+- **Deterministic Fuzzing**: Optional seed-based generation for reproducibility, including seeded batch mode with deterministic per-sample fan-out
 
 ## Installation
 
@@ -134,12 +134,13 @@ Options:
       --seed <SEED>                    Seed for reproducible generation
       --min-opcodes <MIN_OPCODES>      Minimum opcodes to generate [default: 60]
       --max-opcodes <MAX_OPCODES>      Maximum opcodes to generate [default: 300]
-      --mutators <MUTATOR>...          Enable mutators (all, bitflip, boundary, offbyone,
+      --mutators <MUTATOR>             Enable mutators (all, bitflip, boundary, offbyone,
                                        stringlen, character, memoindex, typeconfusion)
       --mutation-rate <MUTATION_RATE>  Mutation probability 0.0-1.0 [default: 0.1]
       --unsafe-mutations               Allow mutations that may produce invalid pickles
       --allow-ext                      Allow EXT* opcodes (requires extension registry)
       --allow-buffer                   Allow buffer opcodes (requires buffer support)
+      --allow-persistent-ids           Allow PERSID/BINPERSID opcodes (requires persistent_load support)
   -h, --help                           Print help
   -V, --version                        Print version
 ```
@@ -147,8 +148,13 @@ Options:
 **Special Opcodes:**
 - `--allow-ext`: Enables EXT1/EXT2/EXT4 opcodes. Only use if your unpickler has a configured extension registry, otherwise unpickling will fail.
 - `--allow-buffer`: Enables NEXT_BUFFER/READONLY_BUFFER opcodes. Only use if your unpickler has out-of-band buffer callbacks configured.
+- `--allow-persistent-ids`: Enables PERSID/BINPERSID opcodes. Only use if your unpickler provides a `persistent_load` callback.
 
 By default, these opcodes are disabled to ensure generated pickles work with standard Python's `pickle` module without additional configuration.
+
+Seeded batch mode derives a deterministic per-sample seed from the base `--seed`,
+so repeated runs reproduce the same corpus without collapsing every file to the
+same bytes.
 
 ## Python Bindings
 
@@ -173,15 +179,21 @@ gen = Generator(protocol=3)
 
 # Generate a random pickle
 pickle_bytes = gen.generate()
+pickle_bytes = gen.generate(max_size=4096)
 
 # Generate from fuzzer input (deterministic)
 fuzzer_data = b"some_fuzzer_input"
 pickle_bytes = gen.generate_from_bytes(fuzzer_data)
+pickle_bytes = gen.generate_from_bytes(fuzzer_data, max_size=4096)
 
 # Configure generation
 gen.set_opcode_range(10, 50)  # Control pickle complexity
-gen.reset()  # Reset internal state
+gen = Generator(protocol=4, allow_persistent_ids=True)  # Opt in to persistent IDs
 ```
+
+`generate()` and `generate_from_bytes()` reset internal generator state before
+each run, so repeated calls on the same `Generator` remain deterministic for the
+same seed or fuzzer input.
 
 ### Integration with Atheris
 
@@ -196,7 +208,7 @@ mutator = PickleMutator(protocol=3)
 
 @atheris.instrument_func
 def test_one_input(data: bytes):
-    # Generate valid pickle from fuzzer input
+    # Generate a valid pickle from fuzzer input within the requested budget
     pickle_bytes = mutator.mutate(data, max_size=10000)
     
     try:
