@@ -41,6 +41,14 @@ impl Generator {
         self.state.stack.push(value);
     }
 
+    /// push an existing shared stack object onto the stack.
+    ///
+    /// this preserves aliasing for opcodes like GET/BINGET that must re-use
+    /// the memoized object instead of creating a fresh copy.
+    pub(super) fn push_ref(&mut self, value: StackObjectRef) {
+        self.state.stack.inner.push(value);
+    }
+
     /// pop a value from the stack.
     ///
     /// removes and returns the top stack object, or `None` if the stack is empty.
@@ -53,16 +61,16 @@ impl Generator {
     ///
     /// retrieves a previously memoized object by its index. returns `None` if
     /// the index doesn't exist in the memo table.
-    pub(super) fn get(&self, index: usize) -> Option<&StackObjectRef> {
-        self.state.memo.get(&index)
+    pub(super) fn get(&self, index: usize) -> Option<StackObjectRef> {
+        self.state.memo.get(&index).cloned()
     }
 
     /// put a value into the memo table.
     ///
     /// stores an object in the memo table at the specified index. this allows
     /// the object to be referenced later by GET/BINGET opcodes.
-    pub(super) fn put(&mut self, index: usize, value: StackObject) {
-        self.state.memo.insert(index, StackObjectRef::new(value));
+    pub(super) fn put(&mut self, index: usize, value: StackObjectRef) {
+        self.state.memo.insert(index, value);
     }
 
     /// check if the stack contains any MARK objects.
@@ -208,6 +216,20 @@ impl Generator {
             }
         }
         None // no MARK found
+    }
+
+    /// check whether any of the top `count` stack slots contain a MARK.
+    ///
+    /// returns `true` if a MARK appears within the slice of the stack that a
+    /// fixed-arity opcode would pop.
+    pub(super) fn has_mark_in_top(&self, count: usize) -> bool {
+        self.state
+            .stack
+            .inner
+            .iter()
+            .rev()
+            .take(count)
+            .any(|obj_ref| matches!(*obj_ref.borrow(), StackObject::Mark))
     }
 
     /// check if the object at a given depth is a string.

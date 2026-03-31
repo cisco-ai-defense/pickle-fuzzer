@@ -114,7 +114,13 @@ impl Generator {
             }
 
             // list operations
-            Append => self.state.stack.len() >= 2 && self.is_list_at(1),
+            Append => {
+                self.state.stack.len() >= 2
+                    && self.is_list_at(1)
+                    && self
+                        .peek()
+                        .is_some_and(|obj| !matches!(*obj.borrow(), StackObject::Mark))
+            }
             Appends => {
                 self.has_mark()
                     && self.is_list_at_mark()
@@ -151,9 +157,9 @@ impl Generator {
             PopMark => self.has_mark(),
 
             // tuple shortcuts (no MARK needed)
-            Tuple1 => self.state.stack.len() >= 1,
-            Tuple2 => self.state.stack.len() >= 2,
-            Tuple3 => self.state.stack.len() >= 3,
+            Tuple1 => self.state.stack.len() >= 1 && !self.has_mark_in_top(1),
+            Tuple2 => self.state.stack.len() >= 2 && !self.has_mark_in_top(2),
+            Tuple3 => self.state.stack.len() >= 3 && !self.has_mark_in_top(3),
 
             // object construction - need proper types on stack
             // REDUCE: stack layout is [... callable args] where args is TOS
@@ -221,12 +227,81 @@ impl Generator {
             // allow only if explicitly enabled via with_ext_opcodes()
             Ext1 | Ext2 | Ext4 => self.allow_ext_opcodes,
 
-            // NextBuffer/ReadOnlyBuffer require out-of-band buffer support
-            // allow only if explicitly enabled via with_buffer_opcodes()
-            NextBuffer | ReadOnlyBuffer => self.allow_buffer_opcodes,
+            // NextBuffer requires out-of-band buffer support and pushes a new buffer.
+            NextBuffer => self.allow_buffer_opcodes,
+            // ReadOnlyBuffer also consumes a buffer-like TOS before pushing a readonly view.
+            ReadOnlyBuffer => {
+                self.allow_buffer_opcodes
+                    && self.peek().is_some_and(|obj| {
+                        matches!(
+                            *obj.borrow(),
+                            StackObject::Bytes(_) | StackObject::ByteArray(_)
+                        )
+                    })
+            }
 
             // frame: handled specially after generation is complete
             Frame => false, // don't emit during generation, will be inserted at the end if needed
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::opcodes::OpcodeKind;
+    use crate::stack::StackObject;
+    use crate::{Generator, Version};
+
+    #[test]
+    fn append_rejects_mark_item() {
+        let mut generator = Generator::new(Version::V4);
+        generator.push(StackObject::List(Vec::new()));
+        generator.push(StackObject::Mark);
+
+        assert!(!generator.can_emit(OpcodeKind::Append));
+
+        generator.pop();
+        generator.push(StackObject::None);
+        assert!(generator.can_emit(OpcodeKind::Append));
+    }
+
+    #[test]
+    fn tuple_shortcuts_reject_marks_in_their_pop_window() {
+        let mut generator = Generator::new(Version::V4);
+        generator.push(StackObject::Mark);
+        assert!(!generator.can_emit(OpcodeKind::Tuple1));
+
+        generator.push(StackObject::None);
+        assert!(!generator.can_emit(OpcodeKind::Tuple2));
+
+        generator.push(StackObject::None);
+        assert!(!generator.can_emit(OpcodeKind::Tuple3));
+
+        let mut clean_generator = Generator::new(Version::V4);
+        clean_generator.push(StackObject::None);
+        clean_generator.push(StackObject::None);
+        clean_generator.push(StackObject::None);
+        assert!(clean_generator.can_emit(OpcodeKind::Tuple3));
+    }
+
+    #[test]
+    fn readonly_buffer_requires_buffer_like_top_of_stack() {
+        let mut generator = Generator::new(Version::V5);
+        generator.allow_buffer_opcodes = true;
+
+        assert!(!generator.can_emit(OpcodeKind::ReadOnlyBuffer));
+
+        generator.push(StackObject::None);
+        assert!(!generator.can_emit(OpcodeKind::ReadOnlyBuffer));
+
+        generator.reset();
+        generator.allow_buffer_opcodes = true;
+        generator.push(StackObject::Bytes(vec![1, 2, 3]));
+        assert!(generator.can_emit(OpcodeKind::ReadOnlyBuffer));
+
+        generator.reset();
+        generator.allow_buffer_opcodes = true;
+        generator.push(StackObject::ByteArray(vec![4, 5]));
+        assert!(generator.can_emit(OpcodeKind::ReadOnlyBuffer));
     }
 }

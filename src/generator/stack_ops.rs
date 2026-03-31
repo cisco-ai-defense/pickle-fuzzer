@@ -37,6 +37,21 @@ use crate::protocol::Version;
 use crate::stack::{InstanceObject, StackObject, StackObjectRef};
 use std::collections::{HashMap, HashSet};
 
+fn decode_signed_le_i64(int_bytes: &[u8]) -> i64 {
+    let size = int_bytes.len().min(8);
+    let mut value: i64 = 0;
+
+    for (index, byte) in int_bytes.iter().take(size).enumerate() {
+        value |= (*byte as i64) << (index * 8);
+    }
+
+    if size > 0 && size < 8 && int_bytes[size - 1] & 0x80 != 0 {
+        value |= !0i64 << (size * 8);
+    }
+
+    value
+}
+
 impl Generator {
     /// clean up the stack to prepare for the STOP opcode.
     ///
@@ -47,7 +62,8 @@ impl Generator {
     /// - if stack is empty: push a None value
     /// - if stack has one MARK: pop it and push None
     /// - if stack has multiple items with MARK: combine items above MARK into tuple
-    /// - if stack has multiple items without MARK: combine top items into tuples
+    /// - if stack has multiple items without MARK: use protocol-appropriate
+    ///   cleanup to reduce the stack to one item
     ///
     /// this method is called at the end of generation to ensure the pickle is
     /// valid before emitting the final STOP opcode.
@@ -62,15 +78,17 @@ impl Generator {
             self.emit_opcode(Tuple);
         }
 
-        // at this point, stack has no MARKs, just regular items
-        // keep combining until we have exactly 1 item
-        // use TUPLE2/TUPLE3 which don't require MARKs
+        // at this point, stack has no MARKs, just regular items.
+        // protocol 2+ can use TUPLE2/TUPLE3, but protocol 0/1 must not emit
+        // those shortcut opcodes during cleanup.
         let mut safety_counter = 0;
         while self.state.stack.len() > 1 && safety_counter < 10000 {
             safety_counter += 1;
 
             let stack_len = self.state.stack.len();
-            if stack_len >= 3 {
+            if self.state.version < Version::V2 {
+                self.emit_opcode(Pop);
+            } else if stack_len >= 3 {
                 self.emit_opcode(Tuple3);
             } else if stack_len == 2 {
                 self.emit_opcode(Tuple2);
@@ -237,8 +255,8 @@ impl Generator {
                 self.push(StackObject::Dict(HashMap::new()));
             }
             Dict => {
-                // allow interior mutability in hash keys - our Hash/Eq implementations
-                // are value-based and we never mutate objects used as dict keys
+                // allow interior mutability in hash keys because StackObjectRef
+                // hashes and compares by Rc identity, not the borrowed value
                 #[allow(clippy::mutable_key_type)]
                 let mut accumulated = HashMap::new();
 
@@ -324,8 +342,8 @@ impl Generator {
                 }
             }
             FrozenSet => {
-                // allow interior mutability in hash keys - our Hash/Eq implementations
-                // are value-based and we never mutate objects used as set members
+                // allow interior mutability in hash keys because StackObjectRef
+                // hashes and compares by Rc identity, not the borrowed value
                 #[allow(clippy::mutable_key_type)]
                 let mut accumulated = HashSet::new();
 
@@ -353,10 +371,9 @@ impl Generator {
                 };
                 // in protocol 0-1, INT opcode with 00/01 represents booleans
                 // protocol 2+ has dedicated NEWTRUE/NEWFALSE opcodes
-                if matches!(self.state.version, Version::V0 | Version::V1)
-                    && (value == 0 || value == 1)
-                {
-                    self.push(StackObject::Bool(value == 1));
+                let is_bool_literal = matches!(arg_bytes, Some(b"00\n" | b"01\n"));
+                if matches!(self.state.version, Version::V0 | Version::V1) && is_bool_literal {
+                    self.push(StackObject::Bool(value != 0));
                 } else {
                     self.push(StackObject::Int(value));
                 }
@@ -416,14 +433,7 @@ impl Generator {
                     let size = arg_bytes[0] as usize;
                     if arg_bytes.len() > size {
                         let int_bytes = &arg_bytes[1..1 + size];
-                        // interpret as little-endian integer without static size
-                        // limit to i64 size (8 bytes) to prevent overflow
-                        let mut value: i64 = 0;
-                        for (i, &b) in int_bytes.iter().enumerate().take(8) {
-                            // safe: i < 8, so i*8 < 64, shift is always valid
-                            value |= (b as i64) << (i * 8);
-                        }
-                        self.push(StackObject::Int(value));
+                        self.push(StackObject::Int(decode_signed_le_i64(int_bytes)));
                     }
                 }
             }
@@ -438,14 +448,7 @@ impl Generator {
                         ]) as usize;
                         if arg_bytes.len() >= 4 + size {
                             let int_bytes = &arg_bytes[4..4 + size];
-                            // interpret as little-endian integer without static size
-                            // limit to i64 size (8 bytes) to prevent overflow
-                            let mut value: i64 = 0;
-                            for (i, &b) in int_bytes.iter().enumerate().take(8) {
-                                // safe: i < 8, so i*8 < 64, shift is always valid
-                                value |= (b as i64) << (i * 8);
-                            }
-                            self.push(StackObject::Int(value));
+                            self.push(StackObject::Int(decode_signed_le_i64(int_bytes)));
                         }
                     }
                 }
@@ -578,12 +581,16 @@ impl Generator {
                     return;
                 }
 
-                // pops state and instance, updates instance's args
-                if let (Some(state), Some(instance_ref)) = (self.pop(), self.pop()) {
-                    if let StackObject::Instance(ref mut inst) = *instance_ref.borrow_mut() {
+                // BUILD pops the state but mutates the existing instance in place.
+                if let Some(state) = self.pop() {
+                    let Some(instance_ref) = self.peek().cloned() else {
+                        return;
+                    };
+
+                    let mut instance = instance_ref.borrow_mut();
+                    if let StackObject::Instance(ref mut inst) = *instance {
                         inst.args = state;
                     }
-                    self.push(instance_ref.borrow().clone());
                 }
             }
             Inst => {
@@ -709,8 +716,7 @@ impl Generator {
                     if let Ok(index_str) = std::str::from_utf8(arg_bytes) {
                         if let Ok(index) = index_str.trim().parse() {
                             if let Some(obj) = self.get(index) {
-                                let cloned = obj.borrow().clone();
-                                self.push(cloned);
+                                self.push_ref(obj);
                             }
                         }
                     }
@@ -720,8 +726,7 @@ impl Generator {
                 if let Some(arg_bytes) = arg_bytes {
                     let index = arg_bytes[0] as usize;
                     if let Some(obj) = self.get(index) {
-                        let cloned = obj.borrow().clone();
-                        self.push(cloned);
+                        self.push_ref(obj);
                     }
                 }
             }
@@ -734,8 +739,7 @@ impl Generator {
                         arg_bytes[3],
                     ]) as usize;
                     if let Some(obj) = self.get(index) {
-                        let cloned = obj.borrow().clone();
-                        self.push(cloned);
+                        self.push_ref(obj);
                     }
                 }
             }
@@ -745,9 +749,8 @@ impl Generator {
                     if let Ok(index_str) = std::str::from_utf8(arg_bytes) {
                         if let Ok(index) = index_str.trim().parse() {
                             if let Some(top) = self.peek() {
-                                let obj = top.borrow().clone();
-                                if !matches!(obj, StackObject::Mark) {
-                                    self.put(index, obj);
+                                if !matches!(*top.borrow(), StackObject::Mark) {
+                                    self.put(index, top.clone());
                                 }
                             }
                         }
@@ -759,9 +762,8 @@ impl Generator {
                 if let Some(arg_bytes) = arg_bytes {
                     let index = arg_bytes[0] as usize;
                     if let Some(top) = self.peek() {
-                        let obj = top.borrow().clone();
-                        if !matches!(obj, StackObject::Mark) {
-                            self.put(index, obj);
+                        if !matches!(*top.borrow(), StackObject::Mark) {
+                            self.put(index, top.clone());
                         }
                     }
                 }
@@ -776,17 +778,15 @@ impl Generator {
                         arg_bytes[3],
                     ]) as usize;
                     if let Some(top) = self.peek() {
-                        let obj = top.borrow().clone();
-                        if !matches!(obj, StackObject::Mark) {
-                            self.put(index, obj);
+                        if !matches!(*top.borrow(), StackObject::Mark) {
+                            self.put(index, top.clone());
                         }
                     }
                 }
             }
             Memoize => {
-                if let Some(top) = self.pop() {
-                    self.put(self.state.memo.len(), top.borrow().clone());
-                    self.push(top.borrow().clone())
+                if let Some(top) = self.peek().cloned() {
+                    self.put(self.state.memo.len(), top);
                 }
             }
             Ext1 | Ext2 | Ext4 => {
@@ -804,7 +804,17 @@ impl Generator {
                 // NEXT_BUFFER pushes a buffer object to the stack
                 self.push(StackObject::Bytes(Vec::new())); // Use empty bytes as placeholder
             }
-            Proto | ReadOnlyBuffer | Stop | Frame => {
+            ReadOnlyBuffer => {
+                if let Some(buffer) = self.pop() {
+                    let readonly_buffer = match &*buffer.borrow() {
+                        StackObject::Bytes(bytes) => StackObject::Bytes(bytes.clone()),
+                        StackObject::ByteArray(bytes) => StackObject::Bytes(bytes.clone()),
+                        other => other.clone(),
+                    };
+                    self.push(readonly_buffer);
+                }
+            }
+            Proto | Stop | Frame => {
                 // these opcodes don't manipulate the stack, but we're being
                 // explicit about it so that we know we've covered all opcodes
             }
@@ -815,5 +825,150 @@ impl Generator {
         // let delta = after as i32 - before as i32;
         // eprintln!("  @{:4} {:20} {} -> {} (Δ{:+})",
         //     pos, format!("{:?}", opcode), before, after, delta);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::opcodes::OpcodeKind;
+    use crate::{Generator, Version};
+    use std::rc::Rc;
+
+    #[test]
+    fn cleanup_for_stop_uses_pop_for_protocol_0() {
+        let mut generator = Generator::new(Version::V0);
+        generator.push(StackObject::Int(1));
+        generator.push(StackObject::Int(2));
+        generator.push(StackObject::Int(3));
+
+        generator.cleanup_for_stop();
+
+        assert_eq!(generator.state.stack.len(), 1);
+        assert!(generator.output.contains(&OpcodeKind::Pop.as_u8()));
+        assert!(!generator.output.contains(&OpcodeKind::Tuple2.as_u8()));
+        assert!(!generator.output.contains(&OpcodeKind::Tuple3.as_u8()));
+    }
+
+    #[test]
+    fn cleanup_for_stop_keeps_tuple_shortcuts_for_protocol_2() {
+        let mut generator = Generator::new(Version::V2);
+        generator.push(StackObject::Int(1));
+        generator.push(StackObject::Int(2));
+        generator.push(StackObject::Int(3));
+
+        generator.cleanup_for_stop();
+
+        assert_eq!(generator.state.stack.len(), 1);
+        assert!(generator.output.contains(&OpcodeKind::Tuple3.as_u8()));
+    }
+
+    #[test]
+    fn int_opcode_only_treats_00_and_01_as_bools() {
+        let mut generator = Generator::new(Version::V0);
+        generator.process_stack_ops(OpcodeKind::Int, Some(b"1\n"));
+        assert!(matches!(
+            *generator.peek().unwrap().borrow(),
+            StackObject::Int(1)
+        ));
+
+        generator.reset();
+        generator.process_stack_ops(OpcodeKind::Int, Some(b"01\n"));
+        assert!(matches!(
+            *generator.peek().unwrap().borrow(),
+            StackObject::Bool(true)
+        ));
+
+        generator.reset();
+        generator.process_stack_ops(OpcodeKind::Int, Some(b"00\n"));
+        assert!(matches!(
+            *generator.peek().unwrap().borrow(),
+            StackObject::Bool(false)
+        ));
+    }
+
+    #[test]
+    fn long_opcodes_sign_extend_short_negative_values() {
+        let mut generator = Generator::new(Version::V4);
+        generator.process_stack_ops(OpcodeKind::Long1, Some(&[1, 0xff]));
+        assert!(matches!(
+            *generator.peek().unwrap().borrow(),
+            StackObject::Int(-1)
+        ));
+
+        generator.reset();
+        generator.process_stack_ops(OpcodeKind::Long4, Some(&[1, 0, 0, 0, 0x80]));
+        assert!(matches!(
+            *generator.peek().unwrap().borrow(),
+            StackObject::Int(-128)
+        ));
+    }
+
+    #[test]
+    fn get_put_and_memoize_preserve_aliasing() {
+        let mut generator = Generator::new(Version::V4);
+        let shared = StackObjectRef::new(StackObject::List(Vec::new()));
+        generator.push_ref(shared.clone());
+
+        generator.process_stack_ops(OpcodeKind::BinPut, Some(&[0]));
+        generator.process_stack_ops(OpcodeKind::BinGet, Some(&[0]));
+
+        let top = generator.peek().unwrap().clone();
+        let below = generator.peek_at(1).unwrap().clone();
+        let memoized = generator.get(0).unwrap();
+        assert!(Rc::ptr_eq(&top.0, &shared.0));
+        assert!(Rc::ptr_eq(&below.0, &shared.0));
+        assert!(Rc::ptr_eq(&memoized.0, &shared.0));
+
+        generator.reset();
+        generator.push_ref(shared.clone());
+        generator.process_stack_ops(OpcodeKind::Memoize, None);
+        let memoized = generator.get(0).unwrap();
+        let top = generator.peek().unwrap().clone();
+        assert_eq!(generator.state.stack.len(), 1);
+        assert!(Rc::ptr_eq(&memoized.0, &shared.0));
+        assert!(Rc::ptr_eq(&top.0, &shared.0));
+    }
+
+    #[test]
+    fn build_mutates_existing_instance_in_place() {
+        let mut generator = Generator::new(Version::V4);
+        let callable = StackObjectRef::new(StackObject::Global {
+            module: "builtins".to_string(),
+            name: "object".to_string(),
+        });
+        let initial_args = StackObjectRef::new(StackObject::Tuple(Vec::new()));
+        let instance = StackObjectRef::new(StackObject::Instance(InstanceObject {
+            callable,
+            args: initial_args,
+        }));
+        let state = StackObjectRef::new(StackObject::Dict(HashMap::new()));
+
+        generator.push_ref(instance.clone());
+        generator.push_ref(state.clone());
+        generator.process_stack_ops(OpcodeKind::Build, None);
+
+        assert_eq!(generator.state.stack.len(), 1);
+        let top = generator.peek().unwrap().clone();
+        assert!(Rc::ptr_eq(&top.0, &instance.0));
+
+        let borrowed = top.borrow();
+        let StackObject::Instance(instance) = &*borrowed else {
+            panic!("expected instance on stack after BUILD");
+        };
+        assert!(Rc::ptr_eq(&instance.args.0, &state.0));
+    }
+
+    #[test]
+    fn readonly_buffer_turns_bytearray_into_bytes() {
+        let mut generator = Generator::new(Version::V5);
+        generator.push(StackObject::ByteArray(vec![1, 2, 3]));
+
+        generator.process_stack_ops(OpcodeKind::ReadOnlyBuffer, None);
+
+        assert!(matches!(
+            &*generator.peek().unwrap().borrow(),
+            StackObject::Bytes(bytes) if bytes == &vec![1, 2, 3]
+        ));
     }
 }

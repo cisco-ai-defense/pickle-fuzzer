@@ -14,10 +14,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
 use std::rc::Rc;
+
+thread_local! {
+    static DROP_CYCLE_CLEANUP_ACTIVE: Cell<bool> = const { Cell::new(false) };
+}
 
 /// Pickle virtual machine (PVM) stack.
 ///
@@ -69,10 +73,10 @@ impl Stack {
 /// - Shared references via pickle memo operations (BINPUT/BINGET)
 /// - Efficient cloning without deep copying
 ///
-/// Implements Hash and Eq by dereferencing and comparing the contained value,
-/// not by pointer identity. This means two StackObjectRef instances pointing
-/// to different allocations with the same value will compare as equal and hash
-/// to the same value. This is necessary for using StackObjectRef as dict keys.
+/// Hash and Eq are based on pointer identity, not the contained value.
+/// Cloned references to the same allocation compare equal and hash the same,
+/// while distinct allocations remain distinct even if their contents match.
+/// This avoids recursive hashing and equality on cyclic structures.
 #[derive(Debug, Clone)]
 pub struct StackObjectRef(pub Rc<RefCell<StackObject>>);
 
@@ -136,6 +140,120 @@ impl StackObjectRef {
             StackObject::Bytes(b) => Some(b.clone()),
             _ => None,
         }
+    }
+
+    fn ptr_addr(&self) -> usize {
+        Rc::as_ptr(&self.0) as *const () as usize
+    }
+
+    fn has_child_refs(&self) -> bool {
+        let Ok(obj) = self.0.try_borrow() else {
+            return false;
+        };
+
+        match &*obj {
+            StackObject::List(items) | StackObject::Tuple(items) => !items.is_empty(),
+            StackObject::Dict(items) => !items.is_empty(),
+            StackObject::Set(items) | StackObject::FrozenSet(items) => !items.is_empty(),
+            StackObject::Callable(_) | StackObject::Instance(_) => true,
+            _ => false,
+        }
+    }
+
+    fn child_refs(&self) -> Vec<StackObjectRef> {
+        let Ok(obj) = self.0.try_borrow() else {
+            return Vec::new();
+        };
+
+        match &*obj {
+            StackObject::List(items) | StackObject::Tuple(items) => items.clone(),
+            StackObject::Dict(items) => {
+                let mut children = Vec::with_capacity(items.len() * 2);
+                for (key, value) in items {
+                    children.push(key.clone());
+                    children.push(value.clone());
+                }
+                children
+            }
+            StackObject::Set(items) | StackObject::FrozenSet(items) => {
+                items.iter().cloned().collect()
+            }
+            StackObject::Callable(inner) => vec![inner.clone()],
+            StackObject::Instance(instance) => {
+                vec![instance.callable.clone(), instance.args.clone()]
+            }
+            _ => Vec::new(),
+        }
+    }
+
+    fn clear_child_refs(&self) {
+        let Ok(mut obj) = self.0.try_borrow_mut() else {
+            return;
+        };
+
+        match &mut *obj {
+            StackObject::List(items) | StackObject::Tuple(items) => items.clear(),
+            StackObject::Dict(items) => items.clear(),
+            StackObject::Set(items) | StackObject::FrozenSet(items) => items.clear(),
+            StackObject::Callable(_) | StackObject::Instance(_) => {
+                *obj = StackObject::Any;
+            }
+            _ => {}
+        }
+    }
+
+    fn cleanup_isolated_subgraph(&self) {
+        let root_ptr = self.ptr_addr();
+        let mut pending = vec![Self(self.0.clone())];
+        let mut nodes = HashMap::new();
+        let mut internal_incoming = HashMap::new();
+
+        while let Some(node) = pending.pop() {
+            let ptr = node.ptr_addr();
+            if nodes.contains_key(&ptr) {
+                continue;
+            }
+
+            let children = node.child_refs();
+            for child in &children {
+                *internal_incoming.entry(child.ptr_addr()).or_insert(0usize) += 1;
+            }
+            pending.extend(children);
+            nodes.insert(ptr, node);
+        }
+
+        let isolated = nodes.iter().all(|(ptr, node)| {
+            let observed_strong = Rc::strong_count(&node.0).saturating_sub(1);
+            let internal_refs = internal_incoming.get(ptr).copied().unwrap_or_default();
+            if *ptr == root_ptr {
+                observed_strong == internal_refs + 1
+            } else {
+                observed_strong == internal_refs
+            }
+        });
+
+        if !isolated {
+            return;
+        }
+
+        for node in nodes.values() {
+            node.clear_child_refs();
+        }
+        drop(nodes);
+    }
+}
+
+impl Drop for StackObjectRef {
+    fn drop(&mut self) {
+        if DROP_CYCLE_CLEANUP_ACTIVE.with(|active| active.get()) || !self.has_child_refs() {
+            return;
+        }
+
+        DROP_CYCLE_CLEANUP_ACTIVE.with(|active| {
+            active.set(true);
+            self.cleanup_isolated_subgraph();
+            active.set(false);
+        });
     }
 }
 
@@ -216,95 +334,6 @@ pub enum StackObject {
     Any,
 }
 
-impl Hash for StackObject {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        match self {
-            StackObject::Int(v) => v.hash(state),
-            StackObject::Float(v) => {
-                let bits = v.to_bits();
-                bits.hash(state);
-            }
-            StackObject::Bool(v) => v.hash(state),
-            StackObject::None => 0.hash(state),
-            StackObject::Bytes(v) => v.hash(state),
-            StackObject::String(v) => v.hash(state),
-            StackObject::ByteArray(v) => v.hash(state),
-            StackObject::List(v) => {
-                for item in v {
-                    item.borrow().hash(state);
-                }
-            }
-            StackObject::Tuple(v) => {
-                for item in v {
-                    item.borrow().hash(state);
-                }
-            }
-            StackObject::Dict(v) => {
-                for (k, v) in v {
-                    k.hash(state);
-                    v.borrow().hash(state);
-                }
-            }
-            StackObject::Set(v) => {
-                for item in v {
-                    item.hash(state);
-                }
-            }
-            StackObject::FrozenSet(v) => {
-                for item in v {
-                    item.hash(state);
-                }
-            }
-            StackObject::Mark => 0.hash(state),
-            StackObject::Global { module, name } => {
-                module.hash(state);
-                name.hash(state);
-            }
-            StackObject::Instance(_) => 0.hash(state), // shallow hash
-            StackObject::Any => 0.hash(state),
-            StackObject::Extension(v) => v.hash(state),
-            StackObject::Callable(inner) => inner.borrow().hash(state),
-        }
-    }
-}
-
-impl PartialEq for StackObject {
-    fn eq(&self, other: &Self) -> bool {
-        match (self, other) {
-            (StackObject::Int(a), StackObject::Int(b)) => a == b,
-            (StackObject::Float(a), StackObject::Float(b)) => a == b,
-            (StackObject::Bool(a), StackObject::Bool(b)) => a == b,
-            (StackObject::None, StackObject::None) => true,
-            (StackObject::Bytes(a), StackObject::Bytes(b)) => a == b,
-            (StackObject::String(a), StackObject::String(b)) => a == b,
-            (StackObject::ByteArray(a), StackObject::ByteArray(b)) => a == b,
-            (StackObject::List(a), StackObject::List(b)) => a == b,
-            (StackObject::Tuple(a), StackObject::Tuple(b)) => a == b,
-            (StackObject::Dict(a), StackObject::Dict(b)) => a == b,
-            (StackObject::Set(a), StackObject::Set(b)) => a == b,
-            (StackObject::FrozenSet(a), StackObject::FrozenSet(b)) => a == b,
-            (StackObject::Mark, StackObject::Mark) => true,
-            (
-                StackObject::Global {
-                    module: am,
-                    name: an,
-                },
-                StackObject::Global {
-                    module: bm,
-                    name: bn,
-                },
-            ) => am == bm && an == bn,
-            (StackObject::Instance(_), StackObject::Instance(_)) => true, // shallow compare
-            (StackObject::Any, StackObject::Any) => true,
-            (StackObject::Extension(a), StackObject::Extension(b)) => a == b,
-            (StackObject::Callable(a), StackObject::Callable(b)) => a == b,
-            _ => false,
-        }
-    }
-}
-
-impl Eq for StackObject {}
-
 /// Represents a Python instance created via REDUCE/BUILD opcodes.
 ///
 /// In pickle, instances are created by calling a callable with arguments,
@@ -316,4 +345,34 @@ pub struct InstanceObject {
     pub callable: StackObjectRef,
     /// The arguments or state passed to the callable
     pub args: StackObjectRef,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::rc::Rc;
+
+    #[test]
+    fn stack_object_ref_uses_pointer_identity() {
+        let first = StackObjectRef::new(StackObject::Int(7));
+        let same = first.clone();
+        let second = StackObjectRef::new(StackObject::Int(7));
+
+        assert_eq!(first, same);
+        assert_ne!(first, second);
+    }
+
+    #[test]
+    fn dropping_last_external_ref_breaks_self_cycle() {
+        let list = StackObjectRef::new(StackObject::List(Vec::new()));
+        let weak = Rc::downgrade(&list.0);
+
+        if let StackObject::List(items) = &mut *list.borrow_mut() {
+            items.push(list.clone());
+        }
+
+        drop(list);
+
+        assert!(weak.upgrade().is_none());
+    }
 }
