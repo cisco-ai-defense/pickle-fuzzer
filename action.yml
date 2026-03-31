@@ -11,7 +11,14 @@ inputs:
     description: >
       Release tag to download (e.g., v1.2.3). Defaults to the action ref if it
       looks like a tag. For branch, SHA, or local checkouts, set this
-      explicitly; use latest only if you want a mutable release.
+      explicitly; use latest only if you want a mutable release. Ignored when
+      binary_path is set.
+    required: false
+    default: ""
+  binary_path:
+    description: >
+      Path to a local pickle-fuzzer binary to install instead of downloading a
+      release asset. Mutually exclusive with version.
     required: false
     default: ""
   args:
@@ -91,7 +98,7 @@ outputs:
     description: Path to the installed pickle-fuzzer binary.
     value: ${{ steps.install.outputs.binary-path }}
   resolved-version:
-    description: Version tag resolved for download.
+    description: Version tag resolved for download, or local when binary_path is used.
     value: ${{ steps.install.outputs.resolved-version }}
 
 runs:
@@ -112,6 +119,7 @@ runs:
       env:
         GH_TOKEN: ${{ github.token }}
         INPUT_VERSION: ${{ inputs.version }}
+        INPUT_BINARY_PATH: ${{ inputs.binary_path }}
         INPUT_ARGS: ${{ inputs.args }}
         INPUT_OUTPUT_DIR: ${{ inputs.output_dir }}
         INPUT_OUTPUT_FILE: ${{ inputs.output_file }}

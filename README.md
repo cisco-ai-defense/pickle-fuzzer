@@ -80,10 +80,11 @@ You can also pass raw arguments via `args`, which overrides other inputs:
     args: "--dir samples --samples 200 --protocol 4"
 ```
 
-Set `version` to download a specific release tag, or `install_only: true` to
-just add the binary to `PATH` without running it. When you pin the action to a
-branch, commit SHA, or local checkout, set `version` explicitly; the action
-does not fall back to `latest` unless you opt into that mutable release.
+Set `version` to download a specific release tag, `binary_path` to install a
+local build, or `install_only: true` to just add the binary to `PATH` without
+running it. When you pin the action to a branch, commit SHA, or local checkout,
+set `version` explicitly; the action does not fall back to `latest` unless you
+opt into that mutable release.
 
 To run a custom Atheris harness (see `python/examples/harness.py` for a starter
 template), use `mode: atheris` and provide a harness path:
