@@ -5,9 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
-
-## [1.0.1] - Unreleased
+## [1.0.1] - 2026-03-31
 
 ### Added
 - Release workflow provenance generation for future attested releases
@@ -64,7 +62,3 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - UNICODE opcode generating invalid escape sequences with backslashes
 - GET/BinGet/LongBinGet using mutated memo indices that don't exist
 - Memo mutator generating invalid references even in safe mode
-
-[Unreleased]: https://github.com/cisco-ai-defense/pickle-fuzzer/compare/v1.0.0...HEAD
-[1.0.1]: https://github.com/cisco-ai-defense/pickle-fuzzer/compare/v1.0.0...HEAD
-[1.0.0]: https://github.com/cisco-ai-defense/pickle-fuzzer/releases/tag/v1.0.0
