@@ -62,3 +62,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - UNICODE opcode generating invalid escape sequences with backslashes
 - GET/BinGet/LongBinGet using mutated memo indices that don't exist
 - Memo mutator generating invalid references even in safe mode
+
+## [0.1.0] - 2024-11-19
+
+### Added
+- Initial release of pickle-fuzzer
+- Structure-aware pickle generation
+- Stack and memo simulation
+- Multi-protocol support (protocols 0-5)
+- CLI interface with batch generation
+- Configurable opcode ranges
+- Deterministic generation with seed support
+- Parallel generation with rayon
+- Mutation system with multiple strategies
+- Comprehensive test suite
+- Apache 2.0 license
+- CODE_OF_CONDUCT.md
+- CONTRIBUTING.md
+- Basic documentation
