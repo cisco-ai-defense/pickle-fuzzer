@@ -156,6 +156,10 @@ Seeded batch mode derives a deterministic per-sample seed from the base `--seed`
 so repeated runs reproduce the same corpus without collapsing every file to the
 same bytes.
 
+The `memoindex` and `typeconfusion` mutators require `--unsafe-mutations`
+because they intentionally allow invalid memo references or incompatible stack
+types.
+
 ## Python Bindings
 
 `pickle-fuzzer` provides Python bindings for integration with Python-based fuzzing tools like Atheris.

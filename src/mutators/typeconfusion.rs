@@ -14,29 +14,20 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use super::{EmissionSnapshot, Mutator};
+use super::{EmissionSnapshot, Mutator, PostProcessEmission};
 use crate::generator::{EntropySource, GenerationSource};
-use crate::opcodes::OpcodeKind;
+use crate::opcodes::{OpcodeKind, PICKLE_OPCODES};
+use crate::Version;
 
-/// Type confusion mutator: replaces value-pushing opcodes with incompatible types.
+/// Type confusion mutator: replaces pure value-pushing opcodes with
+/// incompatible but protocol-valid values.
 ///
-/// This mutator exploits vulnerabilities in pickle scanners that assume opcodes
-/// push specific types. It detects when a value is pushed and replaces the entire
-/// opcode+args with a different type.
-///
-/// Examples:
-/// - String opcode → Int opcode (causes type errors in string-expecting code)
-/// - Int opcode → Float opcode (causes type errors in int-expecting code)
-/// - Float opcode → List opcode (causes type errors in numeric code)
-///
-/// This is more general than just string confusion - it creates type mismatches
-/// for any value-pushing opcode.
+/// This mutator is unsafe by design because it intentionally breaks type
+/// expectations for later stack consumers such as `STACK_GLOBAL`.
 #[derive(Debug)]
-pub struct TypeConfusionMutator {
-    unsafe_mode: bool,
-}
+pub struct TypeConfusionMutator;
 
-/// Types that opcodes can push onto the stack
+/// Types that pure push opcodes can place on the stack.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum StackType {
     Int,
@@ -52,124 +43,227 @@ enum StackType {
 
 impl TypeConfusionMutator {
     pub fn new(unsafe_mode: bool) -> Self {
-        Self { unsafe_mode }
+        assert!(
+            unsafe_mode,
+            "TypeConfusionMutator requires unsafe_mode=true"
+        );
+        Self
     }
 
-    /// Determine what type an opcode pushes onto the stack
-    fn opcode_to_type(opcode_byte: u8) -> Option<StackType> {
-        // Convert byte to OpcodeKind
-        match opcode_byte {
-            // Integers
-            0x49 | 0x4a | 0x4b | 0x4d => Some(StackType::Int), // Int, BinInt, BinInt1, BinInt2
-            0x4c | 0x8a | 0x8b => Some(StackType::Int),        // Long, Long1, Long4
-
-            // Floats
-            0x46 | 0x47 => Some(StackType::Float), // Float, BinFloat
-
-            // Strings
-            0x53 | 0x56 | 0x8c | 0x58 | 0x8d => Some(StackType::String), // String, Unicode, ShortBinUnicode, BinUnicode, BinUnicode8
-
-            // Bytes
-            0x42 | 0x43 | 0x8e | 0x54 | 0x55 => Some(StackType::Bytes), // BinBytes, ShortBinBytes, BinBytes8, BinString, ShortBinString
-
-            // Lists
-            0x5d | 0x6c => Some(StackType::List), // EmptyList, List
-
-            // Tuples
-            0x29 | 0x74 | 0x85 | 0x86 | 0x87 => Some(StackType::Tuple), // EmptyTuple, Tuple, Tuple1, Tuple2, Tuple3
-
-            // Dicts
-            0x7d | 0x64 => Some(StackType::Dict), // EmptyDict, Dict
-
-            // None
-            0x4e => Some(StackType::None), // None
-
-            // Booleans
-            0x88 | 0x89 => Some(StackType::Bool), // NewTrue, NewFalse
-
-            _ => None, // Not a value-pushing opcode
-        }
+    fn supports_opcode(version: Version, opcode: OpcodeKind) -> bool {
+        PICKLE_OPCODES
+            .get(&(version as u8))
+            .is_some_and(|opcodes| opcodes.contains(&opcode))
     }
 
-    /// Choose a different type to confuse with
-    fn choose_wrong_type(original: StackType, source: &mut GenerationSource) -> StackType {
-        let all_types = [
+    fn available_replacement_types(version: Version) -> Vec<StackType> {
+        let mut types = vec![
             StackType::Int,
             StackType::Float,
             StackType::String,
-            StackType::Bytes,
-            StackType::List,
-            StackType::Dict,
-            StackType::Tuple,
             StackType::None,
-            StackType::Bool,
         ];
 
-        // Filter out the original type
-        let different_types: Vec<_> = all_types
-            .iter()
-            .filter(|&&t| t != original)
-            .copied()
-            .collect();
+        if Self::supports_opcode(version, OpcodeKind::ShortBinString)
+            || Self::supports_opcode(version, OpcodeKind::ShortBinBytes)
+        {
+            types.push(StackType::Bytes);
+        }
+        if Self::supports_opcode(version, OpcodeKind::EmptyList) {
+            types.push(StackType::List);
+        }
+        if Self::supports_opcode(version, OpcodeKind::EmptyDict) {
+            types.push(StackType::Dict);
+        }
+        if Self::supports_opcode(version, OpcodeKind::EmptyTuple) {
+            types.push(StackType::Tuple);
+        }
+        if Self::supports_opcode(version, OpcodeKind::NewTrue)
+            || Self::supports_opcode(version, OpcodeKind::Int)
+        {
+            types.push(StackType::Bool);
+        }
 
-        different_types[source.choose_index(different_types.len())]
+        types
     }
 
-    /// Generate bytecode for a specific type
-    fn generate_opcode_for_type(stack_type: StackType, source: &mut GenerationSource) -> Vec<u8> {
+    /// Determine what type a pure push opcode places onto the stack.
+    ///
+    /// Post-processing runs after stack simulation, so opcodes that consume
+    /// existing stack state cannot be safely rewritten here.
+    fn opcode_to_type(opcode_byte: u8) -> Option<StackType> {
+        match opcode_byte {
+            0x49 | 0x4a | 0x4b | 0x4d | 0x4c | 0x8a | 0x8b => Some(StackType::Int),
+            0x46 | 0x47 => Some(StackType::Float),
+            0x53 | 0x56 | 0x8c | 0x58 | 0x8d => Some(StackType::String),
+            0x42 | 0x43 | 0x8e | 0x54 | 0x55 => Some(StackType::Bytes),
+            0x5d => Some(StackType::List),
+            0x7d => Some(StackType::Dict),
+            0x29 => Some(StackType::Tuple),
+            0x4e => Some(StackType::None),
+            0x88 | 0x89 => Some(StackType::Bool),
+            _ => None,
+        }
+    }
+
+    fn choose_wrong_type(
+        version: Version,
+        original: StackType,
+        source: &mut GenerationSource,
+    ) -> Option<StackType> {
+        let different_types: Vec<_> = Self::available_replacement_types(version)
+            .into_iter()
+            .filter(|candidate| *candidate != original)
+            .collect();
+
+        if different_types.is_empty() {
+            None
+        } else {
+            Some(different_types[source.choose_index(different_types.len())])
+        }
+    }
+
+    fn generate_opcode_for_type(
+        stack_type: StackType,
+        version: Version,
+        source: &mut GenerationSource,
+    ) -> Option<Vec<u8>> {
         match stack_type {
             StackType::Int => {
-                // BININT (0x4a) + 4 bytes little-endian
-                let mut bytes = vec![OpcodeKind::BinInt.as_u8()];
-                bytes.extend_from_slice(&source.gen_i32().to_le_bytes());
-                bytes
+                if !Self::supports_opcode(version, OpcodeKind::Int) {
+                    return None;
+                }
+
+                let mut bytes = vec![OpcodeKind::Int.as_u8()];
+                bytes.extend_from_slice(format!("{}\n", source.gen_i32()).as_bytes());
+                Some(bytes)
             }
             StackType::Float => {
-                // BINFLOAT (0x47) + 8 bytes big-endian
-                let mut bytes = vec![OpcodeKind::BinFloat.as_u8()];
-                bytes.extend_from_slice(&source.gen_f64().to_be_bytes());
-                bytes
+                if !Self::supports_opcode(version, OpcodeKind::Float) {
+                    return None;
+                }
+
+                let mut bytes = vec![OpcodeKind::Float.as_u8()];
+                bytes.extend_from_slice(format!("{}\n", source.gen_f64()).as_bytes());
+                Some(bytes)
             }
             StackType::String => {
-                // SHORT_BINUNICODE (0x8c) + 1 byte len + data
-                let s = "confused";
-                let mut bytes = vec![OpcodeKind::ShortBinUnicode.as_u8()];
-                bytes.push(s.len() as u8);
-                bytes.extend_from_slice(s.as_bytes());
-                bytes
+                if !Self::supports_opcode(version, OpcodeKind::Unicode) {
+                    return None;
+                }
+
+                let mut bytes = vec![OpcodeKind::Unicode.as_u8()];
+                bytes.extend_from_slice(b"confused\n");
+                Some(bytes)
             }
             StackType::Bytes => {
-                // SHORT_BINBYTES (0x43) + 1 byte len + data
                 let data = b"confused";
-                let mut bytes = vec![OpcodeKind::ShortBinBytes.as_u8()];
-                bytes.push(data.len() as u8);
-                bytes.extend_from_slice(data);
-                bytes
-            }
-            StackType::List => {
-                // EMPTY_LIST (0x5d)
-                vec![OpcodeKind::EmptyList.as_u8()]
-            }
-            StackType::Dict => {
-                // EMPTY_DICT (0x7d)
-                vec![OpcodeKind::EmptyDict.as_u8()]
-            }
-            StackType::Tuple => {
-                // EMPTY_TUPLE (0x29)
-                vec![OpcodeKind::EmptyTuple.as_u8()]
-            }
-            StackType::None => {
-                // NONE (0x4e)
-                vec![OpcodeKind::None.as_u8()]
-            }
-            StackType::Bool => {
-                // NEWTRUE (0x88) or NEWFALSE (0x89)
-                if source.gen_bool() {
-                    vec![OpcodeKind::NewTrue.as_u8()]
+                if Self::supports_opcode(version, OpcodeKind::ShortBinBytes) {
+                    let mut bytes = vec![OpcodeKind::ShortBinBytes.as_u8(), data.len() as u8];
+                    bytes.extend_from_slice(data);
+                    Some(bytes)
+                } else if Self::supports_opcode(version, OpcodeKind::ShortBinString) {
+                    let mut bytes = vec![OpcodeKind::ShortBinString.as_u8(), data.len() as u8];
+                    bytes.extend_from_slice(data);
+                    Some(bytes)
                 } else {
-                    vec![OpcodeKind::NewFalse.as_u8()]
+                    None
                 }
             }
+            StackType::List => Self::supports_opcode(version, OpcodeKind::EmptyList)
+                .then_some(vec![OpcodeKind::EmptyList.as_u8()]),
+            StackType::Dict => Self::supports_opcode(version, OpcodeKind::EmptyDict)
+                .then_some(vec![OpcodeKind::EmptyDict.as_u8()]),
+            StackType::Tuple => Self::supports_opcode(version, OpcodeKind::EmptyTuple)
+                .then_some(vec![OpcodeKind::EmptyTuple.as_u8()]),
+            StackType::None => Self::supports_opcode(version, OpcodeKind::None)
+                .then_some(vec![OpcodeKind::None.as_u8()]),
+            StackType::Bool => {
+                if Self::supports_opcode(version, OpcodeKind::NewTrue) {
+                    Some(if source.gen_bool() {
+                        vec![OpcodeKind::NewTrue.as_u8()]
+                    } else {
+                        vec![OpcodeKind::NewFalse.as_u8()]
+                    })
+                } else if Self::supports_opcode(version, OpcodeKind::Int) {
+                    let literal = if source.gen_bool() { b"01\n" } else { b"00\n" };
+                    let mut bytes = vec![OpcodeKind::Int.as_u8()];
+                    bytes.extend_from_slice(literal);
+                    Some(bytes)
+                } else {
+                    None
+                }
+            }
+        }
+    }
+
+    fn describe_replacement(output: &[u8]) -> Option<PostProcessEmission> {
+        let opcode = *output.first()?;
+
+        match opcode {
+            value if value == OpcodeKind::Int.as_u8() => Some(PostProcessEmission {
+                opcode: OpcodeKind::Int,
+                arg_bytes: Some(output[1..].to_vec()),
+            }),
+            value if value == OpcodeKind::Float.as_u8() => Some(PostProcessEmission {
+                opcode: OpcodeKind::Float,
+                arg_bytes: Some(output[1..].to_vec()),
+            }),
+            value if value == OpcodeKind::Unicode.as_u8() => Some(PostProcessEmission {
+                opcode: OpcodeKind::Unicode,
+                arg_bytes: Some(output[1..].to_vec()),
+            }),
+            value if value == OpcodeKind::ShortBinString.as_u8() => {
+                let len = *output.get(1)? as usize;
+                (output.len() == 2 + len).then(|| PostProcessEmission {
+                    opcode: OpcodeKind::ShortBinString,
+                    arg_bytes: Some(output[2..].to_vec()),
+                })
+            }
+            value if value == OpcodeKind::ShortBinBytes.as_u8() => {
+                let len = *output.get(1)? as usize;
+                (output.len() == 2 + len).then(|| PostProcessEmission {
+                    opcode: OpcodeKind::ShortBinBytes,
+                    arg_bytes: Some(output[2..].to_vec()),
+                })
+            }
+            value if value == OpcodeKind::EmptyList.as_u8() && output.len() == 1 => {
+                Some(PostProcessEmission {
+                    opcode: OpcodeKind::EmptyList,
+                    arg_bytes: None,
+                })
+            }
+            value if value == OpcodeKind::EmptyDict.as_u8() && output.len() == 1 => {
+                Some(PostProcessEmission {
+                    opcode: OpcodeKind::EmptyDict,
+                    arg_bytes: None,
+                })
+            }
+            value if value == OpcodeKind::EmptyTuple.as_u8() && output.len() == 1 => {
+                Some(PostProcessEmission {
+                    opcode: OpcodeKind::EmptyTuple,
+                    arg_bytes: None,
+                })
+            }
+            value if value == OpcodeKind::None.as_u8() && output.len() == 1 => {
+                Some(PostProcessEmission {
+                    opcode: OpcodeKind::None,
+                    arg_bytes: None,
+                })
+            }
+            value if value == OpcodeKind::NewTrue.as_u8() && output.len() == 1 => {
+                Some(PostProcessEmission {
+                    opcode: OpcodeKind::NewTrue,
+                    arg_bytes: None,
+                })
+            }
+            value if value == OpcodeKind::NewFalse.as_u8() && output.len() == 1 => {
+                Some(PostProcessEmission {
+                    opcode: OpcodeKind::NewFalse,
+                    arg_bytes: None,
+                })
+            }
+            _ => None,
         }
     }
 }
@@ -180,7 +274,7 @@ impl Mutator for TypeConfusionMutator {
     }
 
     fn is_unsafe(&self) -> bool {
-        true // Always unsafe - violates type safety
+        true
     }
 
     fn post_process(
@@ -190,36 +284,42 @@ impl Mutator for TypeConfusionMutator {
         source: &mut GenerationSource,
         rate: f64,
     ) -> bool {
-        if !self.unsafe_mode || source.gen_f64() > rate {
+        if source.gen_f64() > rate {
             return false;
         }
 
-        // Check if anything was emitted
-        if snapshot.output_delta.is_empty() {
-            return false;
-        }
+        let emitted_opcode = match snapshot.output_delta.first() {
+            Some(opcode) => *opcode,
+            None => return false,
+        };
 
-        // Get the opcode that was just emitted
-        let emitted_opcode = snapshot.output_delta[0];
+        let original_type = match Self::opcode_to_type(emitted_opcode) {
+            Some(stack_type) => stack_type,
+            None => return false,
+        };
 
-        // Replace value-pushing opcodes with incompatible types
-        // This will naturally cause type confusion when these values are later
-        // used by opcodes like STACK_GLOBAL that expect specific types
-        if let Some(original_type) = Self::opcode_to_type(emitted_opcode) {
-            // Choose a different type to confuse with
-            let wrong_type = Self::choose_wrong_type(original_type, source);
+        let wrong_type = match Self::choose_wrong_type(snapshot.version, original_type, source) {
+            Some(stack_type) => stack_type,
+            None => return false,
+        };
 
-            // Generate replacement bytecode
-            let replacement = Self::generate_opcode_for_type(wrong_type, source);
+        let replacement = match Self::generate_opcode_for_type(wrong_type, snapshot.version, source)
+        {
+            Some(bytes) => bytes,
+            None => return false,
+        };
 
-            // Replace the entire emission (from snapshot.output_len to current end)
-            output.truncate(snapshot.output_len);
-            output.extend_from_slice(&replacement);
+        output.truncate(snapshot.output_len);
+        output.extend_from_slice(&replacement);
+        true
+    }
 
-            return true;
-        }
-
-        false
+    fn describe_post_process(
+        &self,
+        _snapshot: &EmissionSnapshot,
+        output: &[u8],
+    ) -> Option<PostProcessEmission> {
+        Self::describe_replacement(output)
     }
 }
 
@@ -240,113 +340,141 @@ mod tests {
     fn test_typeconfusion_is_always_unsafe() {
         let mutator = TypeConfusionMutator::new(true);
         assert!(mutator.is_unsafe());
-
-        let mutator_false = TypeConfusionMutator::new(false);
-        assert!(mutator_false.is_unsafe());
     }
 
     #[test]
-    fn test_typeconfusion_opcode_to_type() {
+    #[should_panic(expected = "TypeConfusionMutator requires unsafe_mode=true")]
+    fn test_typeconfusion_requires_unsafe_mode() {
+        let _ = TypeConfusionMutator::new(false);
+    }
+
+    #[test]
+    fn test_typeconfusion_opcode_to_type_only_matches_pure_pushes() {
         assert_eq!(
-            TypeConfusionMutator::opcode_to_type(0x4a),
+            TypeConfusionMutator::opcode_to_type(OpcodeKind::BinInt.as_u8()),
             Some(StackType::Int)
-        ); // BinInt
+        );
         assert_eq!(
-            TypeConfusionMutator::opcode_to_type(0x47),
+            TypeConfusionMutator::opcode_to_type(OpcodeKind::BinFloat.as_u8()),
             Some(StackType::Float)
-        ); // BinFloat
+        );
         assert_eq!(
-            TypeConfusionMutator::opcode_to_type(0x8c),
+            TypeConfusionMutator::opcode_to_type(OpcodeKind::ShortBinUnicode.as_u8()),
             Some(StackType::String)
-        ); // ShortBinUnicode
+        );
         assert_eq!(
-            TypeConfusionMutator::opcode_to_type(0x43),
+            TypeConfusionMutator::opcode_to_type(OpcodeKind::ShortBinBytes.as_u8()),
             Some(StackType::Bytes)
-        ); // ShortBinBytes
+        );
         assert_eq!(
-            TypeConfusionMutator::opcode_to_type(0x5d),
+            TypeConfusionMutator::opcode_to_type(OpcodeKind::EmptyList.as_u8()),
             Some(StackType::List)
-        ); // EmptyList
+        );
         assert_eq!(
-            TypeConfusionMutator::opcode_to_type(0x7d),
+            TypeConfusionMutator::opcode_to_type(OpcodeKind::List.as_u8()),
+            None
+        );
+        assert_eq!(
+            TypeConfusionMutator::opcode_to_type(OpcodeKind::EmptyDict.as_u8()),
             Some(StackType::Dict)
-        ); // EmptyDict
+        );
         assert_eq!(
-            TypeConfusionMutator::opcode_to_type(0x29),
+            TypeConfusionMutator::opcode_to_type(OpcodeKind::Dict.as_u8()),
+            None
+        );
+        assert_eq!(
+            TypeConfusionMutator::opcode_to_type(OpcodeKind::EmptyTuple.as_u8()),
             Some(StackType::Tuple)
-        ); // EmptyTuple
+        );
         assert_eq!(
-            TypeConfusionMutator::opcode_to_type(0x4e),
-            Some(StackType::None)
-        ); // None
+            TypeConfusionMutator::opcode_to_type(OpcodeKind::Tuple.as_u8()),
+            None
+        );
         assert_eq!(
-            TypeConfusionMutator::opcode_to_type(0x88),
-            Some(StackType::Bool)
-        ); // NewTrue
-        assert_eq!(TypeConfusionMutator::opcode_to_type(0xFF), None); // Invalid opcode
+            TypeConfusionMutator::opcode_to_type(OpcodeKind::Tuple1.as_u8()),
+            None
+        );
+        assert_eq!(
+            TypeConfusionMutator::opcode_to_type(OpcodeKind::Tuple2.as_u8()),
+            None
+        );
+        assert_eq!(
+            TypeConfusionMutator::opcode_to_type(OpcodeKind::Tuple3.as_u8()),
+            None
+        );
     }
 
     #[test]
-    fn test_typeconfusion_choose_wrong_type() {
+    fn test_typeconfusion_choose_wrong_type_stays_within_supported_protocol_types() {
         let mut rng = ChaCha8Rng::seed_from_u64(42);
         let mut source = GenerationSource::Rand(&mut rng);
 
-        let original = StackType::Int;
         for _ in 0..10 {
-            let wrong = TypeConfusionMutator::choose_wrong_type(original, &mut source);
-            assert_ne!(wrong, original, "should choose different type");
+            let wrong =
+                TypeConfusionMutator::choose_wrong_type(Version::V0, StackType::Int, &mut source)
+                    .expect("should find replacement type");
+            assert_ne!(wrong, StackType::Int);
+            assert_ne!(wrong, StackType::Bytes);
+            assert_ne!(wrong, StackType::List);
+            assert_ne!(wrong, StackType::Dict);
+            assert_ne!(wrong, StackType::Tuple);
         }
     }
 
     #[test]
-    fn test_typeconfusion_generate_opcode_for_type() {
+    fn test_typeconfusion_generate_opcode_for_type_is_protocol_aware() {
         let mut rng = ChaCha8Rng::seed_from_u64(42);
         let mut source = GenerationSource::Rand(&mut rng);
 
-        // test each type generates valid bytecode
-        let int_bytes = TypeConfusionMutator::generate_opcode_for_type(StackType::Int, &mut source);
-        assert_eq!(int_bytes[0], OpcodeKind::BinInt.as_u8());
-        assert_eq!(int_bytes.len(), 5); // opcode + 4 bytes
+        let bytes_v0 = TypeConfusionMutator::generate_opcode_for_type(
+            StackType::Bytes,
+            Version::V0,
+            &mut source,
+        );
+        assert!(bytes_v0.is_none());
 
-        let float_bytes =
-            TypeConfusionMutator::generate_opcode_for_type(StackType::Float, &mut source);
-        assert_eq!(float_bytes[0], OpcodeKind::BinFloat.as_u8());
-        assert_eq!(float_bytes.len(), 9); // opcode + 8 bytes
+        let bytes_v1 = TypeConfusionMutator::generate_opcode_for_type(
+            StackType::Bytes,
+            Version::V1,
+            &mut source,
+        )
+        .expect("protocol 1 should support a bytes-like replacement");
+        assert_eq!(bytes_v1[0], OpcodeKind::ShortBinString.as_u8());
 
-        let string_bytes =
-            TypeConfusionMutator::generate_opcode_for_type(StackType::String, &mut source);
-        assert_eq!(string_bytes[0], OpcodeKind::ShortBinUnicode.as_u8());
+        let bool_v0 = TypeConfusionMutator::generate_opcode_for_type(
+            StackType::Bool,
+            Version::V0,
+            &mut source,
+        )
+        .expect("protocol 0 bool should fall back to INT literals");
+        assert_eq!(bool_v0[0], OpcodeKind::Int.as_u8());
 
-        let list_bytes =
-            TypeConfusionMutator::generate_opcode_for_type(StackType::List, &mut source);
-        assert_eq!(list_bytes[0], OpcodeKind::EmptyList.as_u8());
-        assert_eq!(list_bytes.len(), 1);
-
-        let none_bytes =
-            TypeConfusionMutator::generate_opcode_for_type(StackType::None, &mut source);
-        assert_eq!(none_bytes[0], OpcodeKind::None.as_u8());
-        assert_eq!(none_bytes.len(), 1);
+        let bool_v4 = TypeConfusionMutator::generate_opcode_for_type(
+            StackType::Bool,
+            Version::V4,
+            &mut source,
+        )
+        .expect("protocol 4 should use NEWTRUE/NEWFALSE");
+        assert!(matches!(
+            bool_v4[0],
+            value if value == OpcodeKind::NewTrue.as_u8()
+                || value == OpcodeKind::NewFalse.as_u8()
+        ));
     }
 
     #[test]
-    fn test_typeconfusion_post_process_disabled_in_safe_mode() {
-        let mutator = TypeConfusionMutator::new(false);
-        let mut rng = ChaCha8Rng::seed_from_u64(42);
-        let mut source = GenerationSource::Rand(&mut rng);
+    fn test_typeconfusion_describe_replacement_parses_supported_outputs() {
+        let described = TypeConfusionMutator::describe_replacement(&[
+            OpcodeKind::ShortBinBytes.as_u8(),
+            3,
+            b'a',
+            b'b',
+            b'c',
+        ])
+        .expect("replacement should be described");
 
-        let snapshot = EmissionSnapshot {
-            stack_depth: 0,
-            output_len: 0,
-            memo_size: 0,
-            stack_delta: vec![],
-            output_delta: vec![0x4a, 0x01, 0x00, 0x00, 0x00], // BinInt
-            memo_delta: vec![],
-        };
-
-        let mut output = vec![0x4a, 0x01, 0x00, 0x00, 0x00];
-        let result = mutator.post_process(&snapshot, &mut output, &mut source, 1.0);
-
-        assert!(!result, "should not mutate in safe mode");
+        assert_eq!(described.opcode, OpcodeKind::ShortBinBytes);
+        assert_eq!(described.arg_bytes, Some(b"abc".to_vec()));
     }
 
     #[test]
@@ -356,30 +484,52 @@ mod tests {
         let mut source = GenerationSource::Rand(&mut rng);
 
         let snapshot = EmissionSnapshot {
+            version: Version::V4,
             stack_depth: 0,
             output_len: 0,
             memo_size: 0,
             stack_delta: vec![],
-            output_delta: vec![0x4a, 0x01, 0x00, 0x00, 0x00], // BinInt
+            output_delta: vec![OpcodeKind::BinInt.as_u8(), 1, 0, 0, 0],
             memo_delta: vec![],
         };
 
-        let output = vec![0x4a, 0x01, 0x00, 0x00, 0x00];
+        let output = vec![OpcodeKind::BinInt.as_u8(), 1, 0, 0, 0];
 
-        // try multiple times to get a mutation
         let mut mutated = false;
         for _ in 0..20 {
             let mut test_output = output.clone();
             if mutator.post_process(&snapshot, &mut test_output, &mut source, 1.0) {
                 mutated = true;
-                assert_ne!(
-                    test_output[0], 0x4a,
-                    "should replace BinInt with different opcode"
-                );
+                assert_ne!(test_output[0], OpcodeKind::BinInt.as_u8());
+                let described = mutator
+                    .describe_post_process(&snapshot, &test_output)
+                    .expect("rewritten opcode should be replayable");
+                assert_ne!(described.opcode.as_u8(), OpcodeKind::BinInt.as_u8());
                 break;
             }
         }
 
         assert!(mutated, "should eventually mutate at rate 1.0");
+    }
+
+    #[test]
+    fn test_typeconfusion_post_process_skips_stack_consuming_constructors() {
+        let mutator = TypeConfusionMutator::new(true);
+        let mut rng = ChaCha8Rng::seed_from_u64(42);
+        let mut source = GenerationSource::Rand(&mut rng);
+
+        let snapshot = EmissionSnapshot {
+            version: Version::V4,
+            stack_depth: 1,
+            output_len: 0,
+            memo_size: 0,
+            stack_delta: vec![],
+            output_delta: vec![OpcodeKind::List.as_u8()],
+            memo_delta: vec![],
+        };
+
+        let mut output = vec![OpcodeKind::List.as_u8()];
+        assert!(!mutator.post_process(&snapshot, &mut output, &mut source, 1.0));
+        assert_eq!(output, vec![OpcodeKind::List.as_u8()]);
     }
 }

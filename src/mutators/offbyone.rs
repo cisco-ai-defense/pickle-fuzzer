@@ -17,7 +17,7 @@
 use super::Mutator;
 use crate::generator::{EntropySource, GenerationSource};
 
-/// Applies off-by-one mutations (value ± 1).
+/// Applies off-by-one mutations (value ± 1) to scalar values.
 #[derive(Debug)]
 pub struct OffByOneMutator;
 
@@ -45,22 +45,6 @@ impl Mutator for OffByOneMutator {
             Some(value.wrapping_add(1))
         } else {
             Some(value.wrapping_sub(1))
-        }
-    }
-
-    fn mutate_memo_index(
-        &self,
-        index: usize,
-        source: &mut GenerationSource,
-        rate: f64,
-    ) -> Option<usize> {
-        if source.gen_f64() > rate {
-            return None;
-        }
-        if source.gen_bool() {
-            Some(index.saturating_add(1))
-        } else {
-            Some(index.saturating_sub(1))
         }
     }
 }
@@ -119,31 +103,12 @@ mod tests {
     }
 
     #[test]
-    fn test_offbyone_memo_index() {
+    fn test_offbyone_does_not_mutate_memo_index() {
         let mutator = OffByOneMutator;
         let mut rng = ChaCha8Rng::seed_from_u64(42);
         let mut source = GenerationSource::Rand(&mut rng);
 
-        let index = 5;
-        for _ in 0..10 {
-            if let Some(result) = mutator.mutate_memo_index(index, &mut source, 1.0) {
-                assert!(result == index + 1 || result == index - 1);
-            }
-        }
-    }
-
-    #[test]
-    fn test_offbyone_memo_index_saturating_at_zero() {
-        let mutator = OffByOneMutator;
-        let mut rng = ChaCha8Rng::seed_from_u64(42);
-        let mut source = GenerationSource::Rand(&mut rng);
-
-        // at index 0, subtracting should saturate to 0
-        for _ in 0..10 {
-            if let Some(result) = mutator.mutate_memo_index(0, &mut source, 1.0) {
-                assert!(result == 0 || result == 1);
-            }
-        }
+        assert!(mutator.mutate_memo_index(5, &mut source, 1.0).is_none());
     }
 
     #[test]

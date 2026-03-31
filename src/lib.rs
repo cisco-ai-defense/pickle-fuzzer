@@ -44,5 +44,5 @@ mod state;
 
 pub use cli::Cli;
 pub use generator::Generator;
-pub use mutators::{EmissionSnapshot, Mutator, MutatorKind};
+pub use mutators::{EmissionSnapshot, Mutator, MutatorKind, PostProcessEmission};
 pub use protocol::Version;

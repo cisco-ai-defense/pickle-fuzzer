@@ -14,7 +14,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use color_eyre::Result;
+use clap::ValueEnum;
+use color_eyre::{eyre::bail, Result};
 use pickle_fuzzer::{Cli, Generator, Version};
 use rand::Rng;
 use rayon::prelude::*;
@@ -28,10 +29,24 @@ fn main() -> Result<()> {
 
     let args = Cli::parse_args();
 
+    if !args.unsafe_mutations {
+        if let Some(kind) = args
+            .mutators
+            .iter()
+            .find(|kind| kind.requires_unsafe_mutations())
+        {
+            let name = kind
+                .to_possible_value()
+                .map(|value| value.get_name().to_string())
+                .unwrap_or_else(|| "unknown".to_string());
+            bail!("--mutators {name} requires --unsafe-mutations");
+        }
+    }
+
     // Expand "all" meta-option and create mutators
     let mutator_kinds: Vec<pickle_fuzzer::MutatorKind> =
         if args.mutators.contains(&pickle_fuzzer::MutatorKind::All) {
-            // if "all" is specified, use all mutators (excluding MemoIndex unless --unsafe-mutations)
+            // if "all" is specified, use all mutators allowed by the current safety mode
             pickle_fuzzer::MutatorKind::all_mutators(args.unsafe_mutations)
         } else {
             // otherwise use the specified mutators

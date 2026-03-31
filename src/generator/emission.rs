@@ -111,6 +111,7 @@ impl Generator {
         use OpcodeKind::*;
 
         // create snapshot before emission
+        let pre_emission_state = self.state.clone();
         let snapshot = self.create_snapshot();
 
         // emit the opcode and any required arguments
@@ -303,7 +304,7 @@ impl Generator {
         }
 
         // post-process mutations
-        self.post_process_emission(snapshot, source);
+        self.post_process_emission(snapshot, pre_emission_state, source);
 
         Ok(())
     }

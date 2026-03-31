@@ -338,6 +338,10 @@ fn test_cli_with_mutators_and_output_path() {
 fn test_cli_with_mutators() {
     let temp_file = NamedTempFile::new().expect("failed to create temp file");
     let temp_path = temp_file.path().to_str().unwrap();
+    let unsafe_file = NamedTempFile::new().expect("failed to create unsafe temp file");
+    let unsafe_path = unsafe_file.path().to_str().unwrap();
+    let memo_file = NamedTempFile::new().expect("failed to create memo temp file");
+    let memo_path = memo_file.path().to_str().unwrap();
 
     cargo_bin_cmd!("pickle-fuzzer")
         .args([
@@ -352,4 +356,29 @@ fn test_cli_with_mutators() {
         .success();
 
     assert!(fs::metadata(temp_path).is_ok(), "output file not created");
+
+    cargo_bin_cmd!("pickle-fuzzer")
+        .args(["--mutators", "typeconfusion", unsafe_path])
+        .assert()
+        .failure();
+
+    cargo_bin_cmd!("pickle-fuzzer")
+        .args(["--mutators", "memoindex", memo_path])
+        .assert()
+        .failure();
+
+    cargo_bin_cmd!("pickle-fuzzer")
+        .args([
+            "--mutators",
+            "typeconfusion",
+            "--unsafe-mutations",
+            unsafe_path,
+        ])
+        .assert()
+        .success();
+
+    cargo_bin_cmd!("pickle-fuzzer")
+        .args(["--mutators", "memoindex", "--unsafe-mutations", memo_path])
+        .assert()
+        .success();
 }

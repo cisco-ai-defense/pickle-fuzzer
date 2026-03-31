@@ -48,6 +48,7 @@
 use super::source::GenerationSource;
 use super::Generator;
 use crate::mutators::EmissionSnapshot;
+use crate::state::State;
 
 impl Generator {
     /// apply mutations to an integer value.
@@ -69,6 +70,9 @@ impl Generator {
 
         let mut result = value;
         for mutator in &self.mutators {
+            if !self.unsafe_mutations && mutator.is_unsafe() {
+                continue;
+            }
             if let Some(mutated) = mutator.mutate_int(result, source, self.mutation_rate) {
                 result = mutated;
                 break; // Apply only one mutation
@@ -96,6 +100,9 @@ impl Generator {
 
         let mut result = value;
         for mutator in &self.mutators {
+            if !self.unsafe_mutations && mutator.is_unsafe() {
+                continue;
+            }
             if let Some(mutated) = mutator.mutate_long(result, source, self.mutation_rate) {
                 result = mutated;
                 break;
@@ -122,6 +129,9 @@ impl Generator {
 
         let mut result = value;
         for mutator in &self.mutators {
+            if !self.unsafe_mutations && mutator.is_unsafe() {
+                continue;
+            }
             if let Some(mutated) = mutator.mutate_float(result, source, self.mutation_rate) {
                 result = mutated;
                 break;
@@ -149,6 +159,9 @@ impl Generator {
 
         let mut result = value;
         for mutator in &self.mutators {
+            if !self.unsafe_mutations && mutator.is_unsafe() {
+                continue;
+            }
             if let Some(mutated) = mutator.mutate_string(result.clone(), source, self.mutation_rate)
             {
                 result = mutated;
@@ -177,6 +190,9 @@ impl Generator {
 
         let mut result = value;
         for mutator in &self.mutators {
+            if !self.unsafe_mutations && mutator.is_unsafe() {
+                continue;
+            }
             if let Some(mutated) = mutator.mutate_bytes(result.clone(), source, self.mutation_rate)
             {
                 result = mutated;
@@ -205,6 +221,9 @@ impl Generator {
 
         let mut result = index;
         for mutator in &self.mutators {
+            if !self.unsafe_mutations && mutator.is_unsafe() {
+                continue;
+            }
             if let Some(mutated) = mutator.mutate_memo_index(result, source, self.mutation_rate) {
                 result = mutated;
                 break;
@@ -223,6 +242,7 @@ impl Generator {
     /// an `EmissionSnapshot` with current state, empty deltas to be filled later.
     pub(super) fn create_snapshot(&self) -> EmissionSnapshot {
         EmissionSnapshot {
+            version: self.state.version,
             stack_depth: self.state.stack.len(),
             output_len: self.output.len(),
             memo_size: self.state.memo.len(),
@@ -252,6 +272,7 @@ impl Generator {
     pub(super) fn post_process_emission(
         &mut self,
         mut snapshot: EmissionSnapshot,
+        pre_emission_state: State,
         source: &mut GenerationSource,
     ) {
         if self.mutators.is_empty() {
@@ -274,9 +295,148 @@ impl Generator {
             snapshot.memo_delta.push(idx);
         }
 
+        let original_output_delta = snapshot.output_delta.clone();
+        let mut synchronized_emission = None;
+
         // Let each mutator post-process
         for mutator in &self.mutators {
+            if !self.unsafe_mutations && mutator.is_unsafe() {
+                continue;
+            }
+
+            let emitted_before = self.output[snapshot.output_len..].to_vec();
             mutator.post_process(&snapshot, &mut self.output, source, self.mutation_rate);
+            let emitted_after = self.output[snapshot.output_len..].to_vec();
+
+            if emitted_after != emitted_before {
+                synchronized_emission =
+                    mutator.describe_post_process(&snapshot, emitted_after.as_slice());
+            }
         }
+
+        let rewritten_output = self.output[snapshot.output_len..].to_vec();
+        if rewritten_output == original_output_delta {
+            return;
+        }
+
+        if let Some(emission) = synchronized_emission {
+            self.state = pre_emission_state;
+            self.process_stack_ops(emission.opcode, emission.arg_bytes.as_deref());
+        } else {
+            self.output.truncate(snapshot.output_len);
+            self.output.extend_from_slice(&original_output_delta);
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::mutators::{Mutator, PostProcessEmission};
+    use crate::opcodes::OpcodeKind;
+    use crate::stack::StackObject;
+    use crate::Version;
+    use rand::SeedableRng;
+    use rand_chacha::ChaCha8Rng;
+
+    #[derive(Debug)]
+    struct RewriteToTrueMutator;
+
+    impl Mutator for RewriteToTrueMutator {
+        fn name(&self) -> &str {
+            "rewrite-to-true"
+        }
+
+        fn is_unsafe(&self) -> bool {
+            true
+        }
+
+        fn post_process(
+            &self,
+            snapshot: &EmissionSnapshot,
+            output: &mut Vec<u8>,
+            _source: &mut GenerationSource,
+            _rate: f64,
+        ) -> bool {
+            output.truncate(snapshot.output_len);
+            output.push(OpcodeKind::NewTrue.as_u8());
+            true
+        }
+
+        fn describe_post_process(
+            &self,
+            _snapshot: &EmissionSnapshot,
+            output: &[u8],
+        ) -> Option<PostProcessEmission> {
+            (output == [OpcodeKind::NewTrue.as_u8()]).then_some(PostProcessEmission {
+                opcode: OpcodeKind::NewTrue,
+                arg_bytes: None,
+            })
+        }
+    }
+
+    #[derive(Debug)]
+    struct UnsynchronizedRewriteMutator;
+
+    impl Mutator for UnsynchronizedRewriteMutator {
+        fn name(&self) -> &str {
+            "unsynchronized-rewrite"
+        }
+
+        fn is_unsafe(&self) -> bool {
+            true
+        }
+
+        fn post_process(
+            &self,
+            snapshot: &EmissionSnapshot,
+            output: &mut Vec<u8>,
+            _source: &mut GenerationSource,
+            _rate: f64,
+        ) -> bool {
+            output.truncate(snapshot.output_len);
+            output.push(0xff);
+            true
+        }
+    }
+
+    #[test]
+    fn test_post_process_resimulates_rewritten_opcode() {
+        let mut generator = Generator::new(Version::V4)
+            .with_mutator(Box::new(RewriteToTrueMutator))
+            .with_mutation_rate(1.0)
+            .with_unsafe_mutations(true);
+        let mut rng = ChaCha8Rng::seed_from_u64(42);
+        let mut source = GenerationSource::Rand(&mut rng);
+
+        generator
+            .emit_and_process(OpcodeKind::None, &mut source)
+            .expect("emission should succeed");
+
+        assert_eq!(generator.output, vec![OpcodeKind::NewTrue.as_u8()]);
+        assert!(matches!(
+            &*generator.peek().expect("stack item").borrow(),
+            StackObject::Bool(true)
+        ));
+    }
+
+    #[test]
+    fn test_post_process_discards_unsynchronized_rewrite() {
+        let mut generator = Generator::new(Version::V4)
+            .with_mutator(Box::new(UnsynchronizedRewriteMutator))
+            .with_mutation_rate(1.0)
+            .with_unsafe_mutations(true);
+        let mut rng = ChaCha8Rng::seed_from_u64(42);
+        let mut source = GenerationSource::Rand(&mut rng);
+
+        generator
+            .emit_and_process(OpcodeKind::None, &mut source)
+            .expect("emission should succeed");
+
+        assert_eq!(generator.output, vec![OpcodeKind::None.as_u8()]);
+        assert!(matches!(
+            &*generator.peek().expect("stack item").borrow(),
+            StackObject::None
+        ));
     }
 }
