@@ -22,12 +22,11 @@ from pickle_fuzzer.fuzzer import PickleMutator
 
 with atheris.instrument_imports():
     import sys
-    import pickle
     # import your fuzz target
 
 
 def TestOneInput(data: bytes) -> None:
-    """Test Python's pickle.loads() with generated data."""
+    """Generate structured pickle data and pass it to your parser."""
     if not data:
         return
     proto = data[0] % 6
@@ -37,6 +36,8 @@ def TestOneInput(data: bytes) -> None:
     try:
         # call your fuzz target with pickle_bytes
         # e.g. target.parse(pickle_bytes)
+        _ = pickle_bytes
+        ...
     except Exception:
         ...
 
