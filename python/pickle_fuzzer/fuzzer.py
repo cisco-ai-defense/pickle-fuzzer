@@ -35,15 +35,14 @@ class PickleMutator:
         ```python
         import atheris
         from pickle_fuzzer.fuzzer import PickleMutator
-        
-        mutator = PickleMutator(protocol=4)
-        
+
         @atheris.instrument_func
         def fuzz_target(data):
-            pickle_bytes = mutator.mutate(data, max_size=10000)
+            input_mutator = PickleMutator(protocol=4)
+            pickle_bytes = input_mutator.mutate(data, max_size=10000)
             # test your pickle parser with pickle_bytes
             ...
-        
+
         atheris.Setup(sys.argv, fuzz_target)
         atheris.Fuzz()
         ```
@@ -124,8 +123,7 @@ def fuzz_pickle_parser(
             # Test the parser
             parser_func(pickle_bytes)
         except Exception:
-            print(f'Failed to parse pickle: {data}')
-            pass  # Expected - we're looking for crashes/hangs
+            pass  # Parser exceptions are expected; we're looking for crashes/hangs.
 
     atheris.Setup(sys.argv, test_one_input)
     atheris.Fuzz()

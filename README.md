@@ -198,23 +198,23 @@ same seed or fuzzer input.
 ### Integration with Atheris
 
 Use the `PickleMutator` class for structure-aware fuzzing:
+Pass generated pickle bytes to the parser you actually want to fuzz. Do not call
+`pickle.loads()` on generated data outside a sandbox.
 
 ```python
 import atheris
+import sys
 from pickle_fuzzer.fuzzer import PickleMutator
-import pickle
-
-mutator = PickleMutator(protocol=3)
 
 @atheris.instrument_func
 def test_one_input(data: bytes):
     # Generate a valid pickle from fuzzer input within the requested budget
-    pickle_bytes = mutator.mutate(data, max_size=10000)
-    
-    try:
-        pickle.loads(pickle_bytes)
-    except Exception:
-        pass  # Expected - looking for crashes
+    input_mutator = PickleMutator(protocol=3)
+    pickle_bytes = input_mutator.mutate(data, max_size=10000)
+
+    # Call the parser you actually want to fuzz with pickle_bytes here.
+    # For example: target.parse_pickle(pickle_bytes)
+    ...
 
 atheris.Setup(sys.argv, test_one_input)
 atheris.Fuzz()
@@ -275,6 +275,9 @@ For detailed fuzzing documentation, see [fuzz/README.md](fuzz/README.md).
 
 ### Fuzzing Custom Pickle Parsers
 
+Do not point these harnesses at `pickle.loads()` unless the unpickling step runs
+inside a sandbox you control.
+
 ```python
 #!/usr/bin/env python3
 import atheris
@@ -283,9 +286,9 @@ from pickle_fuzzer.fuzzer import fuzz_pickle_parser
 
 # Your custom pickle parser
 def my_pickle_parser(data: bytes):
-    # Your parsing logic here
-    import pickle
-    return pickle.loads(data)
+    # Replace this with the parser entrypoint you actually want to fuzz.
+    # Example: return my_project.parse_pickle(data)
+    ...
 
 if __name__ == "__main__":
     # Use structure-aware generation
@@ -300,21 +303,31 @@ if __name__ == "__main__":
 
 ```python
 import atheris
+import io
 import pickle
+import sys
 from pickle_fuzzer.fuzzer import PickleMutator
 
-class CustomUnpickler(pickle.Unpickler):
-    def find_class(self, module, name):
-        # Custom class resolution logic
-        return super().find_class(module, name)
+_ALLOWED_GLOBALS = {
+    # Add only the globals your target intentionally supports.
+}
 
-mutator = PickleMutator(protocol=3)
+
+class RestrictedUnpickler(pickle.Unpickler):
+    def find_class(self, module, name):
+        try:
+            return _ALLOWED_GLOBALS[(module, name)]
+        except KeyError as exc:
+            raise pickle.UnpicklingError(
+                f"global '{module}.{name}' is forbidden in this harness"
+            ) from exc
 
 @atheris.instrument_func
 def test_custom_unpickler(data: bytes):
-    pickle_bytes = mutator.mutate(data, max_size=10000)
+    input_mutator = PickleMutator(protocol=3)
+    pickle_bytes = input_mutator.mutate(data, max_size=10000)
     try:
-        CustomUnpickler(io.BytesIO(pickle_bytes)).load()
+        RestrictedUnpickler(io.BytesIO(pickle_bytes)).load()
     except Exception:
         pass
 
