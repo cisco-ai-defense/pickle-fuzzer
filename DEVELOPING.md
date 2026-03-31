@@ -5,7 +5,7 @@ This guide covers the technical details for developing `pickle-fuzzer`.
 ## Prerequisites
 
 - Rust 1.70 or later
-- Python 3.11.14 (for Python bindings)
+- Python 3.11.x (for Python bindings)
 - Git
 
 ## Initial Setup
