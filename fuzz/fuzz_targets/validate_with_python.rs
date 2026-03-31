@@ -24,8 +24,9 @@
 //! - arbitrary data seed for generation
 //!
 //! the generated pickles are validated using Python's `pickletools.dis()`
-//!  to ensure they are structurally valid and can be parsed by the reference
-//! implementation. this catches bugs in:
+//! plus a whole-file STOP boundary check to ensure they are structurally
+//! valid, fully consumed, and parseable by the reference implementation.
+//! this catches bugs in:
 //! - opcode emission logic
 //! - stack simulation
 //! - protocol version handling
@@ -52,39 +53,54 @@
 //! Generated pickles must:
 //! 1. be non-empty
 //! 2. end with STOP opcode (0x2e / '.')
-//! 3. successfully validate with `pickletools.dis()` which checks:
+//! 3. successfully validate with Python, which checks:
 //!    - all opcodes parse correctly
 //!    - stack has exactly 1 item before STOP
+//!    - no trailing bytes remain after STOP
 //!    - no invalid operations (via Python subprocess)
 #![no_main]
 
 use libfuzzer_sys::fuzz_target;
-use pickle_fuzzer::{Generator, Version};
 use pickle_fuzzer::mutators::{
-    BitFlipMutator, BoundaryMutator, OffByOneMutator,
-    StringLengthMutator, CharacterMutator,
+    BitFlipMutator, BoundaryMutator, CharacterMutator, OffByOneMutator, StringLengthMutator,
 };
-use std::process::{Command, Stdio};
+use pickle_fuzzer::{Generator, Version};
 use std::io::Write;
+use std::process::{Command, Stdio};
 
-/// validate pickle using Python's pickletools.dis() which checks stack state after STOP
+const STRICT_PICKLETOOLS_VALIDATOR: &str = r#"import io
+import pickletools
+import sys
+
+data = sys.stdin.buffer.read()
+stop_pos = None
+for _opcode, _arg, pos in pickletools.genops(data):
+    stop_pos = pos
+if stop_pos is None:
+    raise ValueError("pickle exhausted before seeing STOP")
+if stop_pos + 1 != len(data):
+    raise ValueError(f"trailing bytes after STOP: {len(data) - (stop_pos + 1)}")
+pickletools.dis(data, out=io.StringIO())
+"#;
+
+/// validate pickle using Python's pickletools plus a whole-file STOP check
 fn validate_with_python(pickle_bytes: &[u8]) -> bool {
     let mut child = match Command::new("python3")
         .arg("-c")
-        .arg("import sys, pickletools, io; pickletools.dis(sys.stdin.buffer.read(), out=io.StringIO())")
+        .arg(STRICT_PICKLETOOLS_VALIDATOR)
         .stdin(Stdio::piped())
         .stdout(Stdio::null())
         .stderr(Stdio::piped())
         .spawn()
     {
         Ok(child) => child,
-        Err(_) => return true, // Skip validation if Python unavailable
+        Err(err) => panic!("validate_with_python fuzz target requires python3 on PATH: {err}"),
     };
-    
+
     if let Some(mut stdin) = child.stdin.take() {
         let _ = stdin.write_all(pickle_bytes);
     }
-    
+
     let output = child.wait_with_output().unwrap();
     output.status.success()
 }
@@ -98,15 +114,15 @@ fuzz_target!(|data: &[u8]| {
     // byte 0: protocol version (0-5)
     let protocol = (data[0] % 6) as usize;
     let version = Version::try_from(protocol).unwrap();
-    
+
     let gen = Generator::new(version);
 
     // bytes 1-4: opcode range (min/max)
     let min_opcodes = u16::from_le_bytes([data[1], data[2]]) as usize;
     let max_opcodes = u16::from_le_bytes([data[3], data[4]]) as usize;
-    
+
     // ensure valid range and cap at 1000 opcodes to prevent stack overflow
-    let mut gen = if min_opcodes > max_opcodes  {
+    let mut gen = if min_opcodes > max_opcodes {
         if min_opcodes > 1000 {
             return;
         }
@@ -148,8 +164,12 @@ fuzz_target!(|data: &[u8]| {
     if let Ok(pickle) = gen.generate_from_arbitrary(&data[7..]) {
         // basic structural validation
         assert!(!pickle.is_empty(), "generated pickle must not be empty");
-        assert_eq!(pickle[pickle.len() - 1], b'.', "pickle must end with STOP opcode");
-        
+        assert_eq!(
+            pickle[pickle.len() - 1],
+            b'.',
+            "pickle must end with STOP opcode"
+        );
+
         // validate with Python's pickletools
         assert!(
             validate_with_python(&pickle),

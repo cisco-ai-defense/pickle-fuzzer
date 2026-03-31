@@ -233,7 +233,7 @@ cargo fuzz run validate_with_python
 ### Available Fuzz Targets
 
 - **`all_protocols`**: Fast fuzzing of all protocols (0-5) with structural validation (~5000-10000 execs/sec)
-- **`validate_with_python`**: Comprehensive validation with Python's `pickletools.genops()` (same logic as `scripts/validate-pickles.py`) including mutation testing (~100-500 execs/sec)
+- **`validate_with_python`**: Comprehensive validation with Python's `pickletools.dis()` plus a whole-file STOP boundary check (same logic as `scripts/validate-pickles.py`) including mutation testing (~100-500 execs/sec)
 
 ### Recommended Workflow
 

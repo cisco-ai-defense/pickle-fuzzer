@@ -37,8 +37,8 @@ cargo fuzz run all_protocols -- -max_total_time=3600
 - Opcode emission logic
 
 ### 2. `validate_with_python` - Thorough Python Validation
-**Purpose**: Comprehensive validation with Python's `pickletools.genops()`  
-**Validation**: Full structural validation via Python interpreter (uses same logic as `scripts/validate-pickles.py`)  
+**Purpose**: Comprehensive validation with Python's `pickletools.dis()` plus a whole-file STOP boundary check  
+**Validation**: Full structural validation via Python interpreter with no trailing bytes after STOP (uses same logic as `scripts/validate-pickles.py`)  
 **Speed**: ~100-500 execs/sec (subprocess overhead)  
 **Use**: Ensuring generated pickles are structurally valid and parseable by Python
 
@@ -51,7 +51,7 @@ cargo fuzz run validate_with_python -- -max_total_time=1800
 - Opcode range configuration (min/max opcodes)
 - Mutation system with all mutators
 - Mutation rate configuration
-- Python compatibility via `pickletools.genops()` validation
+- Python compatibility via strict whole-file `pickletools` validation
 
 **Note**: This target spawns Python subprocesses to validate each generated pickle using the same validation logic as `scripts/validate-pickles.py`.
 

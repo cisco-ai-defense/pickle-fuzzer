@@ -31,6 +31,14 @@ import pickletools
 DEFAULT_EXTENSIONS: tuple[str, ...] = (".pkl", ".pickle")
 
 
+def is_confined_to_root(path: Path, root: Path) -> bool:
+    try:
+        path.resolve().relative_to(root)
+    except (OSError, RuntimeError, ValueError):
+        return False
+    return True
+
+
 def iter_pickles(paths: Sequence[str], extensions: Sequence[str]) -> Iterable[Path]:
     exts = tuple(ext.lower() for ext in extensions)
     for raw in paths:
@@ -38,10 +46,13 @@ def iter_pickles(paths: Sequence[str], extensions: Sequence[str]) -> Iterable[Pa
         if not path.exists():
             raise FileNotFoundError(f"Path not found: {path}")
         if path.is_dir():
+            root = path.resolve()
             yield from (
                 child
                 for child in path.rglob("*")
-                if child.is_file() and child.suffix.lower() in exts
+                if child.is_file()
+                and child.suffix.lower() in exts
+                and is_confined_to_root(child, root)
             )
         elif path.is_file():
             if path.suffix.lower() in exts:
@@ -52,14 +63,21 @@ def iter_pickles(paths: Sequence[str], extensions: Sequence[str]) -> Iterable[Pa
 
 def validate_pickle(data: bytes) -> tuple[bool, str | None]:
     try:
-        for _opcode, _arg, _pos in pickletools.genops(data):
-            pass
+        disassemble(data)
     except Exception as exc:  # pragma: no cover - defensive
         return False, str(exc)
     return True, None
 
 
 def disassemble(data: bytes) -> str:
+    stop_pos = None
+    for _opcode, _arg, pos in pickletools.genops(data):
+        stop_pos = pos
+    if stop_pos is None:
+        raise ValueError("pickle exhausted before seeing STOP")
+    if stop_pos + 1 != len(data):
+        raise ValueError(f"trailing bytes after STOP: {len(data) - (stop_pos + 1)}")
+
     buffer = io.StringIO()
     pickletools.dis(data, out=buffer)
     return buffer.getvalue()
@@ -79,7 +97,7 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
         "--extension",
         dest="extensions",
         action="append",
-        default=list(DEFAULT_EXTENSIONS),
+        default=None,
         help="File extension to include (default: .pkl, .pickle). Specify multiple times.",
     )
     parser.add_argument(
@@ -98,7 +116,8 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
 
 def main(argv: Sequence[str] | None = None) -> int:
     ns = parse_args(sys.argv[1:] if argv is None else argv)
-    paths = sorted(set(iter_pickles(ns.paths, ns.extensions)))
+    extensions = ns.extensions if ns.extensions is not None else DEFAULT_EXTENSIONS
+    paths = sorted(set(iter_pickles(ns.paths, extensions)))
 
     if not paths:
         print("No pickle files matched the provided paths and extensions.", file=sys.stderr)
