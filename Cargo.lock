@@ -191,7 +191,7 @@ dependencies = [
 
 [[package]]
 name = "cisco-ai-defense-pickle-fuzzer"
-version = "0.1.0"
+version = "1.0.1"
 dependencies = [
  "arbitrary",
  "assert_cmd",
