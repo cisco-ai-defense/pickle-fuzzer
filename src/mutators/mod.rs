@@ -20,6 +20,7 @@
 //! to create more diverse test cases for fuzzing and validation.
 
 use crate::generator::GenerationSource;
+use crate::opcodes::OpcodeKind;
 use clap::ValueEnum;
 
 use crate::stack::StackObjectRef;
@@ -46,6 +47,9 @@ pub use typeconfusion::TypeConfusionMutator;
 /// and perform post-processing mutations on the bytecode.
 #[derive(Debug, Clone)]
 pub struct EmissionSnapshot {
+    /// Protocol version for the just-emitted opcode.
+    pub version: crate::Version,
+
     /// Stack depth before emission
     pub stack_depth: usize,
 
@@ -63,6 +67,16 @@ pub struct EmissionSnapshot {
 
     /// Memo indices added by this emission
     pub memo_delta: Vec<usize>,
+}
+
+/// A rewritten emission that can be replayed through normal stack simulation.
+#[derive(Debug, Clone)]
+pub struct PostProcessEmission {
+    /// Rewritten opcode kind.
+    pub opcode: OpcodeKind,
+
+    /// Raw argument bytes, excluding the opcode byte.
+    pub arg_bytes: Option<Vec<u8>>,
 }
 
 /// Available mutator types.
@@ -89,8 +103,8 @@ pub enum MutatorKind {
 impl MutatorKind {
     /// returns all individual mutator kinds (excluding the "all" meta-option).
     ///
-    /// if `unsafe_mutations` is false, excludes MemoIndex mutator since it can
-    /// generate invalid memo references even in safe mode.
+    /// if `unsafe_mutations` is false, excludes mutators that can only be used
+    /// when invalid pickle outputs are allowed.
     pub fn all_mutators(unsafe_mutations: bool) -> Vec<MutatorKind> {
         let mut mutators = vec![
             MutatorKind::Bitflip,
@@ -98,15 +112,20 @@ impl MutatorKind {
             MutatorKind::Offbyone,
             MutatorKind::Stringlen,
             MutatorKind::Character,
-            MutatorKind::Typeconfusion,
         ];
 
-        // only include MemoIndex when explicitly using unsafe mutations
+        // only include unsafe-only mutators when explicitly enabled
         if unsafe_mutations {
             mutators.push(MutatorKind::Memoindex);
+            mutators.push(MutatorKind::Typeconfusion);
         }
 
         mutators
+    }
+
+    /// Returns whether this mutator requires `--unsafe-mutations`.
+    pub fn requires_unsafe_mutations(&self) -> bool {
+        matches!(self, MutatorKind::Memoindex | MutatorKind::Typeconfusion)
     }
 
     /// Create a boxed mutator instance from this kind.
@@ -210,5 +229,38 @@ pub trait Mutator: Send + Sync + std::fmt::Debug {
         _rate: f64,
     ) -> bool {
         false // Default: no post-processing
+    }
+
+    /// Describe the current rewritten emission so the generator can replay its
+    /// stack and memo effects instead of trusting stale pre-mutation state.
+    fn describe_post_process(
+        &self,
+        _snapshot: &EmissionSnapshot,
+        _output: &[u8],
+    ) -> Option<PostProcessEmission> {
+        None
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::MutatorKind;
+
+    #[test]
+    fn test_all_mutators_excludes_unsafe_only_mutators_without_flag() {
+        let safe = MutatorKind::all_mutators(false);
+        assert!(!safe.contains(&MutatorKind::Memoindex));
+        assert!(!safe.contains(&MutatorKind::Typeconfusion));
+
+        let unsafe_set = MutatorKind::all_mutators(true);
+        assert!(unsafe_set.contains(&MutatorKind::Memoindex));
+        assert!(unsafe_set.contains(&MutatorKind::Typeconfusion));
+    }
+
+    #[test]
+    fn test_requires_unsafe_mutations() {
+        assert!(MutatorKind::Memoindex.requires_unsafe_mutations());
+        assert!(MutatorKind::Typeconfusion.requires_unsafe_mutations());
+        assert!(!MutatorKind::Bitflip.requires_unsafe_mutations());
     }
 }

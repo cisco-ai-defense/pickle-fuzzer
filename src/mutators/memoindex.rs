@@ -58,7 +58,9 @@ impl Mutator for MemoIndexMutator {
     }
 
     fn is_unsafe(&self) -> bool {
-        self.unsafe_mode
+        // Even the "safe" mode can increment the highest valid memo slot and
+        // produce a reference to a nonexistent key.
+        true
     }
 }
 
@@ -129,7 +131,7 @@ mod tests {
         let safe_mutator = MemoIndexMutator::new(false);
         let unsafe_mutator = MemoIndexMutator::new(true);
 
-        assert!(!safe_mutator.is_unsafe());
+        assert!(safe_mutator.is_unsafe());
         assert!(unsafe_mutator.is_unsafe());
     }
 }
