@@ -22,7 +22,6 @@ use tempfile::TempDir;
 use pickle_fuzzer::{Generator, Version};
 
 #[test]
-#[cfg_attr(tarpaulin, ignore)]
 fn test_generate_all_protocol_versions() {
     for version_num in 0..=5 {
         let version = Version::try_from(version_num).unwrap();
@@ -65,6 +64,26 @@ fn test_deterministic_generation_with_seed() {
 }
 
 #[test]
+fn test_repeated_generation_with_same_seed_on_one_generator_is_deterministic() {
+    let mut gen = Generator::new(Version::V3).with_seed(42);
+
+    let pickle1 = gen.generate().unwrap();
+    let pickle2 = gen.generate().unwrap();
+
+    assert_eq!(pickle1, pickle2);
+}
+
+#[test]
+fn test_repeated_generate_from_arbitrary_is_deterministic() {
+    let mut gen = Generator::new(Version::V3);
+
+    let pickle1 = gen.generate_from_arbitrary(b"same_input").unwrap();
+    let pickle2 = gen.generate_from_arbitrary(b"same_input").unwrap();
+
+    assert_eq!(pickle1, pickle2);
+}
+
+#[test]
 fn test_different_seeds_produce_different_pickles() {
     let mut gen1 = Generator::new(Version::V3).with_seed(1);
     let mut gen2 = Generator::new(Version::V3).with_seed(2);
@@ -86,6 +105,22 @@ fn test_opcode_range_configuration() {
 
     let result = gen.generate();
     assert!(result.is_ok());
+
+    let gen = Generator::new(Version::V3)
+        .with_min_opcodes(20)
+        .with_max_opcodes(10);
+    assert_eq!(gen.min_opcodes, 10);
+    assert_eq!(gen.max_opcodes, 10);
+
+    let gen = Generator::new(Version::V3)
+        .with_max_opcodes(10)
+        .with_min_opcodes(20);
+    assert_eq!(gen.min_opcodes, 20);
+    assert_eq!(gen.max_opcodes, 20);
+
+    let gen = Generator::new(Version::V3).with_opcode_range(20, 10);
+    assert_eq!(gen.min_opcodes, 10);
+    assert_eq!(gen.max_opcodes, 20);
 }
 
 #[test]
@@ -109,6 +144,25 @@ fn test_builder_pattern() {
 
     let result = gen.generate();
     assert!(result.is_ok());
+}
+
+#[test]
+fn test_generate_with_buffer_size_respects_limit() {
+    let mut gen = Generator::new(Version::V3)
+        .with_seed(123)
+        .with_buffer_size(64);
+    let pickle = gen.generate().unwrap();
+
+    assert!(pickle.len() <= 64);
+    assert_eq!(pickle[pickle.len() - 1], b'.');
+}
+
+#[test]
+fn test_impossible_total_opcode_budget_errors() {
+    let mut gen = Generator::new(Version::V2).with_opcode_range(0, 0);
+    let err = gen.generate().unwrap_err().to_string();
+
+    assert!(err.contains("cannot fit a valid protocol 2 pickle"));
 }
 
 #[test]
@@ -226,12 +280,54 @@ fn test_cli_batch_mode() {
 }
 
 #[test]
+fn test_cli_batch_mode_with_seed_is_distinct_and_reproducible() {
+    let temp_dir1 = TempDir::new().expect("failed to create temp dir 1");
+    let temp_dir2 = TempDir::new().expect("failed to create temp dir 2");
+    let temp_path1 = temp_dir1.path().to_str().unwrap();
+    let temp_path2 = temp_dir2.path().to_str().unwrap();
+
+    cargo_bin_cmd!("pickle-fuzzer")
+        .args(["--dir", temp_path1, "--samples", "3", "--seed", "42"])
+        .assert()
+        .success();
+
+    cargo_bin_cmd!("pickle-fuzzer")
+        .args(["--dir", temp_path2, "--samples", "3", "--seed", "42"])
+        .assert()
+        .success();
+
+    let first_run: Vec<Vec<u8>> = (0..3)
+        .map(|idx| fs::read(temp_dir1.path().join(format!("{idx}.pkl"))).unwrap())
+        .collect();
+    let second_run: Vec<Vec<u8>> = (0..3)
+        .map(|idx| fs::read(temp_dir2.path().join(format!("{idx}.pkl"))).unwrap())
+        .collect();
+
+    assert_eq!(first_run, second_run);
+    assert_ne!(first_run[0], first_run[1]);
+    assert_ne!(first_run[1], first_run[2]);
+}
+
+#[test]
 fn test_cli_with_opcode_range() {
     let temp_file = NamedTempFile::new().expect("failed to create temp file");
     let temp_path = temp_file.path().to_str().unwrap();
 
     cargo_bin_cmd!("pickle-fuzzer")
         .args(["--min-opcodes", "10", "--max-opcodes", "20", temp_path])
+        .assert()
+        .success();
+
+    assert!(fs::metadata(temp_path).is_ok(), "output file not created");
+}
+
+#[test]
+fn test_cli_with_mutators_and_output_path() {
+    let temp_file = NamedTempFile::new().expect("failed to create temp file");
+    let temp_path = temp_file.path().to_str().unwrap();
+
+    cargo_bin_cmd!("pickle-fuzzer")
+        .args(["--mutators", "bitflip", temp_path])
         .assert()
         .success();
 

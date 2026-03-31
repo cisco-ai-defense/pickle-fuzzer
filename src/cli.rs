@@ -14,9 +14,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::path::PathBuf;
+use std::{ffi::OsString, path::PathBuf};
 
-use clap::Parser;
+use clap::{Parser, ValueEnum};
 
 /// Parse and validate a pickle protocol version string.
 ///
@@ -30,6 +30,50 @@ fn parse_version(s: &str) -> Result<usize, String> {
     } else {
         Err(format!("version must be 0-5, got {}", v))
     }
+}
+
+fn normalize_mutator_args<I>(args: I) -> Vec<OsString>
+where
+    I: IntoIterator<Item = OsString>,
+{
+    let args: Vec<OsString> = args.into_iter().collect();
+    let mut normalized = Vec::with_capacity(args.len());
+    let mut idx = 0;
+
+    while idx < args.len() {
+        let arg = &args[idx];
+        if arg == "--mutators" {
+            normalized.push(arg.clone());
+            idx += 1;
+
+            let mut saw_mutator = false;
+            while idx < args.len() {
+                let Some(value) = args[idx].to_str() else {
+                    break;
+                };
+                if value == "--" || value.starts_with('-') {
+                    break;
+                }
+                if crate::mutators::MutatorKind::from_str(value, true).is_err() {
+                    break;
+                }
+
+                if saw_mutator {
+                    normalized.push(OsString::from("--mutators"));
+                }
+                normalized.push(args[idx].clone());
+                saw_mutator = true;
+                idx += 1;
+            }
+
+            continue;
+        }
+
+        normalized.push(arg.clone());
+        idx += 1;
+    }
+
+    normalized
 }
 
 /// Command-line interface for pickle-fuzzer.
@@ -68,7 +112,7 @@ pub struct Cli {
     #[arg(short, long, default_value_t = 10_000, requires = "dir")]
     pub samples: usize,
 
-    /// seed for random number generator (for reproducible, byte-identical generation)
+    /// seed for reproducible generation
     #[arg(long)]
     pub seed: Option<u64>,
 
@@ -80,8 +124,12 @@ pub struct Cli {
     #[arg(long, default_value_t = 300)]
     pub max_opcodes: usize,
 
-    /// enable specific mutators (can be specified multiple times)
-    #[arg(long = "mutators", value_name = "MUTATOR", num_args = 1..)]
+    /// enable specific mutators (repeat the flag or list mutators after one occurrence)
+    #[arg(
+        long = "mutators",
+        value_name = "MUTATOR",
+        action = clap::ArgAction::Append
+    )]
     pub mutators: Vec<crate::mutators::MutatorKind>,
 
     /// mutation rate (0.0-1.0, probability of applying mutation)
@@ -99,9 +147,17 @@ pub struct Cli {
     /// allow NEXT_BUFFER/READONLY_BUFFER opcodes (requires out-of-band buffer support in unpickler)
     #[arg(long)]
     pub allow_buffer: bool,
+
+    /// allow PERSID/BINPERSID opcodes (requires persistent_load support in unpickler)
+    #[arg(long)]
+    pub allow_persistent_ids: bool,
 }
 
 impl Cli {
+    pub fn parse_args() -> Self {
+        Self::parse_from(normalize_mutator_args(std::env::args_os()))
+    }
+
     /// Check if running in batch mode (generating multiple files).
     pub fn is_batch_mode(&self) -> bool {
         self.dir.is_some()
@@ -154,6 +210,7 @@ mod tests {
             unsafe_mutations: false,
             allow_ext: false,
             allow_buffer: false,
+            allow_persistent_ids: false,
         };
 
         assert!(cli_single.is_single_file_mode());
@@ -172,9 +229,33 @@ mod tests {
             unsafe_mutations: false,
             allow_ext: false,
             allow_buffer: false,
+            allow_persistent_ids: false,
         };
 
         assert!(!cli_batch.is_single_file_mode());
         assert!(cli_batch.is_batch_mode());
+    }
+
+    #[test]
+    fn test_normalize_mutator_args_keeps_output_path_positional() {
+        let normalized = normalize_mutator_args([
+            OsString::from("pickle-fuzzer"),
+            OsString::from("--mutators"),
+            OsString::from("bitflip"),
+            OsString::from("boundary"),
+            OsString::from("output.pkl"),
+        ]);
+
+        assert_eq!(
+            normalized,
+            vec![
+                OsString::from("pickle-fuzzer"),
+                OsString::from("--mutators"),
+                OsString::from("bitflip"),
+                OsString::from("--mutators"),
+                OsString::from("boundary"),
+                OsString::from("output.pkl"),
+            ]
+        );
     }
 }

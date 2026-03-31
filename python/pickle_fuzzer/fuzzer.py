@@ -15,6 +15,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 """Atheris integration utilities for pickle-fuzzer fuzzing."""
+import pickle
 import sys
 from typing import Optional, Callable
 
@@ -56,14 +57,17 @@ class PickleMutator:
             seed: optional seed for deterministic generation
         """
         self.protocol = protocol
+        self.seed = seed
         self.generator = Generator(protocol=protocol, seed=seed)
+        self._fallback_pickle = pickle.dumps(None, protocol=protocol)
+        self._minimum_fallback_pickle = pickle.dumps(None, protocol=0)
     
     def mutate(self, data: bytes, max_size: int) -> bytes:
         """mutate pickle data using structure-aware mutations.
         
         uses the fuzzer-provided data as a seed for generating new pickle
-        bytecode. the generated pickle will be valid according to the
-        specified protocol version.
+        bytecode. when max_size can accommodate a pickle for the configured
+        protocol, the returned pickle remains structurally valid.
         
         args:
             data: fuzzer-provided input data
@@ -73,14 +77,19 @@ class PickleMutator:
             generated pickle bytecode
         """
         try:
-            # use fuzzer bytes to generate new pickle
-            result = self.generator.generate_from_bytes(data)
-            if len(result) <= max_size:
-                return result
-            # if too large, truncate to max_size (may be invalid)
-            return result[:max_size]
-        except Exception:
-            # if generation fails, return original data
+            return self.generator.generate_from_bytes(data, max_size=max_size)
+        except Exception as exc:
+            print(
+                f"PickleMutator generation failed for protocol {self.protocol}: {exc}",
+                file=sys.stderr,
+            )
+
+            if len(self._fallback_pickle) <= max_size:
+                return self._fallback_pickle
+            if len(self._minimum_fallback_pickle) <= max_size:
+                return self._minimum_fallback_pickle
+
+            # No valid pickle fits in the requested budget.
             return data[:max_size] if len(data) > max_size else data
     
     def reset(self):
