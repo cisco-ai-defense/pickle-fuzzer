@@ -25,7 +25,7 @@ homepage = "https://github.com/cisco-ai-defense/pickle-fuzzer"
 documentation = "https://docs.rs/cisco-ai-defense-pickle-fuzzer"
 readme = "README.md"
 license = "Apache-2.0"
-keywords = ["fuzzing", "pickle", "security", "testing", "generator", "corpus"]
+keywords = ["fuzzing", "pickle", "security", "testing", "generator"]
 categories = ["development-tools::testing", "command-line-utilities"]
 
 [[bin]]

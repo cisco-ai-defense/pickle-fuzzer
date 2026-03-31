@@ -48,8 +48,10 @@ The binary will be available at `target/release/pickle-fuzzer`.
 ### Installing from Crates.io
 
 ```bash
-cargo install pickle-fuzzer
+cargo install cisco-ai-defense-pickle-fuzzer
 ```
+
+This installs the `pickle-fuzzer` binary.
 
 ## GitHub Action
 
