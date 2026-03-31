@@ -19,6 +19,9 @@ on:
         required: false
         default: 'all_protocols'
 
+permissions:
+  contents: read
+
 env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
@@ -73,6 +76,9 @@ jobs:
               echo "::warning::Memory leaks detected (not failing build)"
               ls -la fuzz/artifacts/all_protocols/leak-*
             fi
+          else
+            echo "::error::Fuzzing did not create fuzz/artifacts/all_protocols. cargo fuzz likely failed before execution."
+            exit 1
           fi
 
       - name: Upload crash artifacts
@@ -114,17 +120,28 @@ jobs:
 
       - name: Determine fuzzing duration
         id: duration
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_DURATION: ${{ github.event.inputs.duration }}
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "duration=${{ github.event.inputs.duration }}" >> $GITHUB_OUTPUT
-          else
-            echo "duration=1800" >> $GITHUB_OUTPUT
+          duration=1800
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            case "$INPUT_DURATION" in
+              ''|*[!0-9]*)
+                echo "::error::workflow_dispatch input 'duration' must be a whole number of seconds"
+                exit 1
+                ;;
+            esac
+            duration="$INPUT_DURATION"
           fi
+          printf 'duration=%s\n' "$duration" >> "$GITHUB_OUTPUT"
 
       - name: Run thorough fuzzing with Python validation
+        env:
+          FUZZ_DURATION: ${{ steps.duration.outputs.duration }}
         run: |
           cargo fuzz run validate_with_python -- \
-            -max_total_time=${{ steps.duration.outputs.duration }} \
+            -max_total_time="$FUZZ_DURATION" \
             -print_final_stats=1 \
             -verbosity=1
         continue-on-error: true
@@ -146,6 +163,9 @@ jobs:
               echo "::warning::Memory leaks detected (not failing build)"
               ls -la fuzz/artifacts/validate_with_python/leak-*
             fi
+          else
+            echo "::error::Fuzzing did not create fuzz/artifacts/validate_with_python. cargo fuzz likely failed before execution."
+            exit 1
           fi
 
       - name: Upload crash artifacts
@@ -177,47 +197,83 @@ jobs:
       - name: Install cargo-fuzz
         run: cargo install cargo-fuzz
 
+      - name: Validate custom fuzz target
+        id: target
+        env:
+          INPUT_TARGET: ${{ github.event.inputs.target }}
+        run: |
+          case "$INPUT_TARGET" in
+            all_protocols|validate_with_python)
+              printf 'target=%s\n' "$INPUT_TARGET" >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              echo "::error::workflow_dispatch input 'target' must be one of: all_protocols, validate_with_python"
+              exit 1
+              ;;
+          esac
+
       - name: Cache fuzz corpus
         uses: actions/cache@v4
         with:
-          path: fuzz/corpus/${{ github.event.inputs.target }}
-          key: fuzz-corpus-${{ github.event.inputs.target }}-${{ github.sha }}
+          path: fuzz/corpus/${{ steps.target.outputs.target }}
+          key: fuzz-corpus-${{ steps.target.outputs.target }}-${{ github.sha }}
           restore-keys: |
-            fuzz-corpus-${{ github.event.inputs.target }}-
+            fuzz-corpus-${{ steps.target.outputs.target }}-
+
+      - name: Validate custom fuzz duration
+        id: duration
+        env:
+          INPUT_DURATION: ${{ github.event.inputs.duration }}
+        run: |
+          case "$INPUT_DURATION" in
+            ''|*[!0-9]*)
+              echo "::error::workflow_dispatch input 'duration' must be a whole number of seconds"
+              exit 1
+              ;;
+          esac
+          printf 'duration=%s\n' "$INPUT_DURATION" >> "$GITHUB_OUTPUT"
 
       - name: Run custom fuzzing
+        env:
+          FUZZ_TARGET: ${{ steps.target.outputs.target }}
+          FUZZ_DURATION: ${{ steps.duration.outputs.duration }}
         run: |
-          cargo fuzz run ${{ github.event.inputs.target }} -- \
-            -max_total_time=${{ github.event.inputs.duration }} \
+          cargo fuzz run "$FUZZ_TARGET" -- \
+            -max_total_time="$FUZZ_DURATION" \
             -print_final_stats=1 \
             -verbosity=1
         continue-on-error: true
 
       - name: Check for crashes
-        if: always()
+        if: always() && steps.target.outputs.target != ''
+        env:
+          FUZZ_TARGET: ${{ steps.target.outputs.target }}
         run: |
-          if [ -d "fuzz/artifacts/${{ github.event.inputs.target }}" ]; then
+          if [ -d "fuzz/artifacts/$FUZZ_TARGET" ]; then
             # Only fail on actual crashes, not memory leaks (often false positives)
-            if ls fuzz/artifacts/${{ github.event.inputs.target }}/crash-* 2>/dev/null || \
-               ls fuzz/artifacts/${{ github.event.inputs.target }}/timeout-* 2>/dev/null || \
-               ls fuzz/artifacts/${{ github.event.inputs.target }}/oom-* 2>/dev/null; then
+            if ls "fuzz/artifacts/$FUZZ_TARGET"/crash-* 2>/dev/null || \
+               ls "fuzz/artifacts/$FUZZ_TARGET"/timeout-* 2>/dev/null || \
+               ls "fuzz/artifacts/$FUZZ_TARGET"/oom-* 2>/dev/null; then
               echo "::error::Fuzzing found crashes!"
-              ls -la fuzz/artifacts/${{ github.event.inputs.target }}/
+              ls -la "fuzz/artifacts/$FUZZ_TARGET"/
               exit 1
             fi
             # Log leaks but don't fail
-            if ls fuzz/artifacts/${{ github.event.inputs.target }}/leak-* 2>/dev/null; then
+            if ls "fuzz/artifacts/$FUZZ_TARGET"/leak-* 2>/dev/null; then
               echo "::warning::Memory leaks detected (not failing build)"
-              ls -la fuzz/artifacts/${{ github.event.inputs.target }}/leak-*
+              ls -la "fuzz/artifacts/$FUZZ_TARGET"/leak-*
             fi
+          else
+            echo "::error::Fuzzing did not create fuzz/artifacts/$FUZZ_TARGET. cargo fuzz likely failed before execution."
+            exit 1
           fi
 
       - name: Upload crash artifacts
-        if: failure()
+        if: failure() && steps.target.outputs.target != ''
         uses: actions/upload-artifact@v4
         with:
-          name: fuzz-crashes-${{ github.event.inputs.target }}
-          path: fuzz/artifacts/${{ github.event.inputs.target }}/
+          name: fuzz-crashes-${{ steps.target.outputs.target }}
+          path: fuzz/artifacts/${{ steps.target.outputs.target }}/
           if-no-files-found: ignore
 
   minimize-corpus:
