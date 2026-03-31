@@ -233,7 +233,7 @@ impl Generator {
             let remaining_budget = body_and_cleanup_budget - emitted_body_opcodes;
             let budgeted_ops: Vec<_> = valid_ops
                 .into_iter()
-                .filter(|opcode| 1 + self.cleanup_opcode_count_after(*opcode) <= remaining_budget)
+                .filter(|opcode| self.cleanup_opcode_count_after(*opcode) < remaining_budget)
                 .collect();
             if budgeted_ops.is_empty() {
                 break;
