@@ -102,8 +102,10 @@ jobs:
         with:
           toolchain: nightly
 
-      - name: Verify system Python
-        run: python3 --version
+      - name: Install Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
 
       - name: Install cargo-fuzz
         run: cargo install cargo-fuzz
@@ -187,8 +189,10 @@ jobs:
         with:
           toolchain: nightly
 
-      - name: Verify system Python
-        run: python3 --version
+      - name: Install Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
 
       - name: Install cargo-fuzz
         run: cargo install cargo-fuzz

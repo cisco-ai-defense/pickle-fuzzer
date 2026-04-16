@@ -83,9 +83,22 @@ if stop_pos + 1 != len(data):
 pickletools.dis(data, out=io.StringIO())
 "#;
 
+const PYTHON_ENV_REMOVALS: &[&str] = &[
+    "pythonLocation",
+    "Python_ROOT_DIR",
+    "Python2_ROOT_DIR",
+    "Python3_ROOT_DIR",
+    "PKG_CONFIG_PATH",
+];
+
 /// validate pickle using Python's pickletools plus a whole-file STOP check
 fn validate_with_python(pickle_bytes: &[u8]) -> bool {
-    let mut child = match Command::new("python3")
+    let mut command = Command::new("python3");
+    for key in PYTHON_ENV_REMOVALS {
+        command.env_remove(key);
+    }
+
+    let mut child = match command
         .arg("-c")
         .arg(STRICT_PICKLETOOLS_VALIDATOR)
         .stdin(Stdio::piped())
