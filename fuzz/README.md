@@ -68,13 +68,6 @@ GitHub runner variables are inherited by the spawned `python3` process:
 
 If the variable is unset, the target defaults to `strip_setup_python`.
 
-To inspect the effective child-process environment that the fuzz target will use:
-
-```bash
-PICKLE_FUZZ_PYTHON_ENV_POLICY=strip_setup_python_and_ld_library_path \
-cargo run --manifest-path fuzz/Cargo.toml --example report_python_env --quiet
-```
-
 ## Recommended Workflow
 
 ### Phase 1: Fast Discovery (1-2 hours)

@@ -32,7 +32,6 @@ cargo audit
 cargo deny check advisories
 cd fuzz && cargo audit
 cargo +nightly-2026-04-16 test --manifest-path fuzz/Cargo.toml
-PICKLE_FUZZ_PYTHON_ENV_POLICY=strip_setup_python_and_ld_library_path cargo +nightly-2026-04-16 run --manifest-path fuzz/Cargo.toml --example report_python_env --quiet
 ```
 
 GitHub evidence already observed on PR `#24`:
