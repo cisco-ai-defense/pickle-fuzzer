@@ -248,16 +248,10 @@ The project includes automated fuzzing via GitHub Actions (`.github/workflows/fu
 - **Daily (2 AM UTC)**: 30-minute thorough fuzzing with `validate_with_python`
 - **Daily**: Corpus minimization to remove redundant test cases
 
-The repo also includes `.github/workflows/fuzz-python-env-comparison.yml`, a
-PR/workflow-dispatch matrix that compares the effective Python child-process
-environment for the three policy variants on `ubuntu-latest`.
 The scheduled/custom `validate_with_python` jobs in `.github/workflows/fuzz.yml`
 explicitly use `strip_setup_python_and_ld_library_path` on GitHub-hosted
-runners.
-For exact-input follow-up, `.github/workflows/fuzz-python-env-replay.yml`
-replays saved `validate_with_python` artifacts under all three policies on
-`ubuntu-latest`; on PRs it targets the latest completed comparison run for the
-branch, and on `workflow_dispatch` it accepts an explicit comparison run id.
+runners to keep the spawned `python3` process from inheriting the hosted
+toolcache `LD_LIBRARY_PATH`.
 
 ### Manual Runs
 

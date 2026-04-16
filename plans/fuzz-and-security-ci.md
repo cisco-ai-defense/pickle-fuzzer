@@ -2,9 +2,8 @@
 
 ## Scope
 
-Fix the failing fuzz and security workflows on PR `#24`, keep the fuzz leak
-investigation reproducible in GitHub CI, and clear the remaining Clippy failure
-on the branch.
+Fix the failing fuzz and security workflows on PR `#24` and leave the branch on
+the final hosted-runner fix for `validate_with_python`.
 
 ## Acceptance
 
@@ -12,10 +11,9 @@ on the branch.
   lockfiles.
 - `validate_with_python` can select a Python subprocess env policy through
   `PICKLE_FUZZ_PYTHON_ENV_POLICY`.
-- GitHub CI can compare the effective child-process environment for the three
-  policy variants on `ubuntu-latest`.
-- The main fuzz workflow uses the targeted policy without broad leak
-  suppression.
+- The main GitHub-hosted fuzz workflow uses
+  `strip_setup_python_and_ld_library_path` for `validate_with_python` without
+  broad leak suppression.
 - The fuzz helper contract tests run in regular PR CI.
 - Security CI covers both `Cargo.lock` and `fuzz/Cargo.lock`.
 - `cargo clippy --all-targets --all-features -- -D warnings` passes on the
@@ -41,18 +39,12 @@ GitHub evidence already observed on PR `#24`:
 
 - `Security Audit` green
 - `Fuzz Testing` green
-- Seeded `Fuzz Python Env Comparison` on April 16, 2026 showed:
-  `inherit` leaked, `strip-setup-python` crashed with a zero-byte artifact,
-  and `strip-setup-python-and-ld-library-path` finished clean
+- Investigation on April 16, 2026 showed the saved `inherit` leak input
+  reproduces under `inherit` and `strip_setup_python`, but goes clean under
+  `strip_setup_python_and_ld_library_path`
 
 ## Notes
 
-- The comparison workflow is diagnostic. It verifies the effective Python child
-  environment used by the fuzz target, records policy/duration/seed metadata,
-  and uploads both the env report and fuzz artifacts for each policy.
 - The main GitHub-hosted `validate_with_python` workflow now uses
   `strip_setup_python_and_ld_library_path`, while the fuzz target's unset local
   default remains `strip_setup_python`.
-- `.github/workflows/fuzz-python-env-replay.yml` can replay the saved
-  `inherit` leak artifact and the `strip-setup-python` zero-byte artifact under
-  all three policies on `ubuntu-latest`.

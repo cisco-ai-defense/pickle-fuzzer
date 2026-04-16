@@ -98,14 +98,8 @@ fn spawned_python_process_applies_each_env_policy() {
 
 #[test]
 fn workflow_and_docs_stay_in_sync_with_supported_policies() {
-    let workflow = std::fs::read_to_string(
-        repo_root().join(".github/workflows/fuzz-python-env-comparison.yml"),
-    )
-    .expect("workflow should exist");
-    let replay_workflow = std::fs::read_to_string(
-        repo_root().join(".github/workflows/fuzz-python-env-replay.yml"),
-    )
-    .expect("replay workflow should exist");
+    let workflow = std::fs::read_to_string(repo_root().join(".github/workflows/fuzz.yml"))
+        .expect("workflow should exist");
     let readme = std::fs::read_to_string(repo_root().join("fuzz/README.md"))
         .expect("fuzz README should exist");
 
@@ -115,49 +109,31 @@ fn workflow_and_docs_stay_in_sync_with_supported_policies() {
         PythonEnvPolicy::StripSetupPythonAndLdLibraryPath,
     ] {
         let name = policy.as_str();
-        assert!(
-            workflow.contains(name),
-            "workflow must mention policy {name}"
-        );
-        assert!(
-            replay_workflow.contains(name),
-            "replay workflow must mention policy {name}"
-        );
         assert!(readme.contains(name), "README must mention policy {name}");
     }
 
-    for artifact_name in ["fuzz-python-env-inherit", "fuzz-python-env-strip-setup-python"] {
-        assert!(
-            replay_workflow.contains(artifact_name),
-            "replay workflow must mention source artifact {artifact_name}"
-        );
-    }
-
     assert!(
-        readme.contains(".github/workflows/fuzz-python-env-replay.yml"),
-        "README must mention the replay workflow"
+        !readme.contains("fuzz-python-env-comparison.yml"),
+        "README should not mention removed comparison workflow"
+    );
+    assert!(
+        !readme.contains("fuzz-python-env-replay.yml"),
+        "README should not mention removed replay workflow"
     );
 
-    for path in [
-        "fuzz/fuzz_targets/validate_with_python.rs",
-        "fuzz/src/lib.rs",
-        "fuzz/src/python_env.rs",
-        "fuzz/examples/report_python_env.rs",
-    ] {
-        assert!(
-            workflow.contains(path),
-            "workflow path filters must include {path}"
-        );
-    }
-
-    let main_workflow =
-        std::fs::read_to_string(repo_root().join(".github/workflows/fuzz.yml"))
-            .expect("main fuzz workflow should exist");
-    let policy_count = main_workflow
+    let policy_count = workflow
         .matches("PICKLE_FUZZ_PYTHON_ENV_POLICY: strip_setup_python_and_ld_library_path")
         .count();
     assert_eq!(
         policy_count, 2,
         "main fuzz workflow should set strip_setup_python_and_ld_library_path for both validate_with_python entry points"
+    );
+    assert!(
+        !workflow.contains("fuzz-python-env-comparison"),
+        "main workflow should not reference removed comparison jobs"
+    );
+    assert!(
+        !workflow.contains("fuzz-python-env-replay"),
+        "main workflow should not reference removed replay jobs"
     );
 }
