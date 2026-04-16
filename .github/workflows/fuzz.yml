@@ -139,6 +139,7 @@ jobs:
       - name: Run thorough fuzzing with Python validation
         env:
           FUZZ_DURATION: ${{ steps.duration.outputs.duration }}
+          PICKLE_FUZZ_PYTHON_ENV_POLICY: strip_setup_python
         run: |
           cargo fuzz run validate_with_python -- \
             -max_total_time="$FUZZ_DURATION" \
@@ -237,6 +238,7 @@ jobs:
         env:
           FUZZ_TARGET: ${{ steps.target.outputs.target }}
           FUZZ_DURATION: ${{ steps.duration.outputs.duration }}
+          PICKLE_FUZZ_PYTHON_ENV_POLICY: strip_setup_python
         run: |
           cargo fuzz run "$FUZZ_TARGET" -- \
             -max_total_time="$FUZZ_DURATION" \

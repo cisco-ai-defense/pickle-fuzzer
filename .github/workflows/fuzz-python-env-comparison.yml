@@ -1,0 +1,133 @@
+name: Fuzz Python Env Comparison
+
+on:
+  pull_request:
+    branches: [ main ]
+    paths:
+      - .github/workflows/fuzz-python-env-comparison.yml
+      - .github/workflows/fuzz.yml
+      - fuzz/fuzz_targets/validate_with_python.rs
+      - Cargo.toml
+      - Cargo.lock
+      - fuzz/Cargo.toml
+      - fuzz/Cargo.lock
+  workflow_dispatch:
+    inputs:
+      duration:
+        description: Fuzzing duration in seconds
+        required: false
+        default: "1800"
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  compare-python-env:
+    name: Compare Python env policy (${{ matrix.name }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: inherit
+            env_policy: inherit
+          - name: strip-setup-python
+            env_policy: strip_setup_python
+          - name: strip-setup-python-and-ld-library-path
+            env_policy: strip_setup_python_and_ld_library_path
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@0f1b44df7e9cbb178d781a242338dfa5e243ad7f
+        with:
+          toolchain: nightly
+
+      - name: Install Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install cargo-fuzz
+        run: cargo install cargo-fuzz
+
+      - name: Cache fuzz corpus
+        uses: actions/cache@v4
+        with:
+          path: fuzz/corpus/validate_with_python
+          key: fuzz-python-env-compare-${{ github.sha }}
+          restore-keys: |
+            fuzz-python-env-compare-
+            fuzz-corpus-validate-python-
+
+      - name: Determine fuzzing duration
+        id: duration
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_DURATION: ${{ github.event.inputs.duration }}
+        run: |
+          duration=1800
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            case "$INPUT_DURATION" in
+              ''|*[!0-9]*)
+                echo "::error::workflow_dispatch input 'duration' must be a whole number of seconds"
+                exit 1
+                ;;
+            esac
+            duration="$INPUT_DURATION"
+          fi
+          printf 'duration=%s\n' "$duration" >> "$GITHUB_OUTPUT"
+
+      - name: Report Python environment
+        env:
+          PICKLE_FUZZ_PYTHON_ENV_POLICY: ${{ matrix.env_policy }}
+        run: |
+          echo "policy=$PICKLE_FUZZ_PYTHON_ENV_POLICY"
+          python3 --version
+          env | sort | grep -E '^(pythonLocation|PKG_CONFIG_PATH|Python_ROOT_DIR|Python2_ROOT_DIR|Python3_ROOT_DIR|LD_LIBRARY_PATH)=' || true
+
+      - name: Run Python-validation fuzzing
+        env:
+          FUZZ_DURATION: ${{ steps.duration.outputs.duration }}
+          PICKLE_FUZZ_PYTHON_ENV_POLICY: ${{ matrix.env_policy }}
+        run: |
+          cargo fuzz run validate_with_python -- \
+            -max_total_time="$FUZZ_DURATION" \
+            -print_final_stats=1 \
+            -verbosity=1
+        continue-on-error: true
+
+      - name: Check for crashes
+        if: always()
+        run: |
+          if [ -d "fuzz/artifacts/validate_with_python" ]; then
+            if ls fuzz/artifacts/validate_with_python/crash-* 2>/dev/null || \
+               ls fuzz/artifacts/validate_with_python/timeout-* 2>/dev/null || \
+               ls fuzz/artifacts/validate_with_python/oom-* 2>/dev/null; then
+              echo "::error::Fuzzing found crashes for policy ${{ matrix.env_policy }}!"
+              ls -la fuzz/artifacts/validate_with_python/
+              exit 1
+            fi
+            if ls fuzz/artifacts/validate_with_python/leak-* 2>/dev/null; then
+              echo "::warning::Memory leaks detected for policy ${{ matrix.env_policy }}"
+              ls -la fuzz/artifacts/validate_with_python/leak-*
+            fi
+          else
+            echo "::error::Fuzzing did not create fuzz/artifacts/validate_with_python. cargo fuzz likely failed before execution."
+            exit 1
+          fi
+
+      - name: Upload fuzz artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-python-env-${{ matrix.name }}
+          path: fuzz/artifacts/validate_with_python/
+          if-no-files-found: ignore
