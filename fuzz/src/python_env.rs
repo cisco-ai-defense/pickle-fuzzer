@@ -15,18 +15,10 @@
 // limitations under the License.
 
 use std::env;
+use std::ffi::OsString;
 use std::process::Command;
 
 pub const PYTHON_ENV_POLICY_VAR: &str = "PICKLE_FUZZ_PYTHON_ENV_POLICY";
-
-pub const OBSERVED_PYTHON_ENV_KEYS: &[&str] = &[
-    "pythonLocation",
-    "Python_ROOT_DIR",
-    "Python2_ROOT_DIR",
-    "Python3_ROOT_DIR",
-    "PKG_CONFIG_PATH",
-    "LD_LIBRARY_PATH",
-];
 
 const STRIP_SETUP_PYTHON_REMOVALS: &[&str] = &[
     "pythonLocation",
@@ -54,9 +46,9 @@ pub enum PythonEnvPolicy {
 
 impl PythonEnvPolicy {
     pub fn from_env_var() -> Self {
-        match env::var(PYTHON_ENV_POLICY_VAR) {
-            Ok(value) => Self::resolve(Some(value.as_str())),
-            Err(_) => Self::resolve(None),
+        match env::var_os(PYTHON_ENV_POLICY_VAR) {
+            Some(value) => Self::resolve_os(Some(&value)),
+            None => Self::resolve(None),
         }
     }
 
@@ -74,6 +66,19 @@ impl PythonEnvPolicy {
                 Self::StripSetupPython
             }
             None => Self::StripSetupPython,
+        }
+    }
+
+    pub fn resolve_os(raw: Option<&OsString>) -> Self {
+        match raw.and_then(|value| value.to_str()) {
+            Some(value) => Self::resolve(Some(value)),
+            None if raw.is_some() => {
+                eprintln!(
+                    "warning: invalid non-UTF-8 {PYTHON_ENV_POLICY_VAR}; defaulting to strip_setup_python"
+                );
+                Self::StripSetupPython
+            }
+            None => Self::resolve(None),
         }
     }
 
@@ -139,6 +144,18 @@ mod tests {
     fn resolve_invalid_values_fall_back_to_safe_default() {
         assert_eq!(
             PythonEnvPolicy::resolve(Some("definitely_not_valid")),
+            PythonEnvPolicy::StripSetupPython
+        );
+    }
+
+    #[test]
+    fn resolve_non_utf8_values_fall_back_to_safe_default() {
+        use std::os::unix::ffi::OsStringExt;
+
+        let value = OsString::from_vec(b"\xffinvalid".to_vec());
+
+        assert_eq!(
+            PythonEnvPolicy::resolve_os(Some(&value)),
             PythonEnvPolicy::StripSetupPython
         );
     }

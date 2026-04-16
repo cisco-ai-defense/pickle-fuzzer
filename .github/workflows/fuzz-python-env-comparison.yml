@@ -7,6 +7,9 @@ on:
       - .github/workflows/fuzz-python-env-comparison.yml
       - .github/workflows/fuzz.yml
       - fuzz/fuzz_targets/validate_with_python.rs
+      - fuzz/src/lib.rs
+      - fuzz/src/python_env.rs
+      - fuzz/examples/report_python_env.rs
       - Cargo.toml
       - Cargo.lock
       - fuzz/Cargo.toml
@@ -88,7 +91,10 @@ jobs:
       - name: Report effective Python environment
         env:
           PICKLE_FUZZ_PYTHON_ENV_POLICY: ${{ matrix.env_policy }}
-        run: cargo run --manifest-path fuzz/Cargo.toml --example report_python_env --quiet
+        run: |
+          mkdir -p fuzz/artifacts/python-env-reports
+          cargo run --manifest-path fuzz/Cargo.toml --example report_python_env --quiet \
+            > "fuzz/artifacts/python-env-reports/${{ matrix.name }}.txt"
 
       - name: Run Python-validation fuzzing
         env:
@@ -128,3 +134,11 @@ jobs:
           name: fuzz-python-env-${{ matrix.name }}
           path: fuzz/artifacts/validate_with_python/
           if-no-files-found: ignore
+
+      - name: Upload Python env report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-python-env-report-${{ matrix.name }}
+          path: fuzz/artifacts/python-env-reports/${{ matrix.name }}.txt
+          if-no-files-found: error

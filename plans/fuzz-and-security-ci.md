@@ -32,7 +32,7 @@ cargo audit
 cargo deny check advisories
 cd fuzz && cargo audit
 cargo +nightly-2026-04-16 test --manifest-path fuzz/Cargo.toml
-cargo +nightly-2026-04-16 run --manifest-path fuzz/Cargo.toml --example report_python_env --quiet
+PICKLE_FUZZ_PYTHON_ENV_POLICY=strip_setup_python cargo +nightly-2026-04-16 run --manifest-path fuzz/Cargo.toml --example report_python_env --quiet
 ```
 
 GitHub evidence already observed on PR `#24`:
@@ -45,7 +45,8 @@ GitHub evidence already observed on PR `#24`:
 ## Notes
 
 - The comparison workflow is diagnostic. It verifies the effective Python child
-  environment used by the fuzz target and records artifacts for each policy.
+  environment used by the fuzz target and uploads both the env report and fuzz
+  artifacts for each policy.
 - The current branch default remains `strip_setup_python` for scheduled and
   custom `validate_with_python` runs because it is the least invasive CI-only
   change under active observation.
