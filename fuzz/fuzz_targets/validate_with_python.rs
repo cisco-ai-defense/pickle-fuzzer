@@ -61,12 +61,13 @@
 #![no_main]
 
 use libfuzzer_sys::fuzz_target;
+use pickle_fuzzer_fuzz::python_env::{spawn_python_command, PythonEnvPolicy};
 use pickle_fuzzer::mutators::{
     BitFlipMutator, BoundaryMutator, CharacterMutator, OffByOneMutator, StringLengthMutator,
 };
 use pickle_fuzzer::{Generator, Version};
 use std::io::Write;
-use std::process::{Command, Stdio};
+use std::process::Stdio;
 
 const STRICT_PICKLETOOLS_VALIDATOR: &str = r#"import io
 import pickletools
@@ -85,7 +86,7 @@ pickletools.dis(data, out=io.StringIO())
 
 /// validate pickle using Python's pickletools plus a whole-file STOP check
 fn validate_with_python(pickle_bytes: &[u8]) -> bool {
-    let mut child = match Command::new("python3")
+    let mut child = match spawn_python_command(PythonEnvPolicy::from_env_var())
         .arg("-c")
         .arg(STRICT_PICKLETOOLS_VALIDATOR)
         .stdin(Stdio::piped())
