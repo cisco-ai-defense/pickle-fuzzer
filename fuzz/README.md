@@ -71,7 +71,7 @@ If the variable is unset, the target defaults to `strip_setup_python`.
 To inspect the effective child-process environment that the fuzz target will use:
 
 ```bash
-PICKLE_FUZZ_PYTHON_ENV_POLICY=strip_setup_python \
+PICKLE_FUZZ_PYTHON_ENV_POLICY=strip_setup_python_and_ld_library_path \
 cargo run --manifest-path fuzz/Cargo.toml --example report_python_env --quiet
 ```
 
@@ -251,6 +251,12 @@ The project includes automated fuzzing via GitHub Actions (`.github/workflows/fu
 The repo also includes `.github/workflows/fuzz-python-env-comparison.yml`, a
 PR/workflow-dispatch matrix that compares the effective Python child-process
 environment for the three policy variants on `ubuntu-latest`.
+The scheduled/custom `validate_with_python` jobs in `.github/workflows/fuzz.yml`
+explicitly use `strip_setup_python_and_ld_library_path` on GitHub-hosted
+runners.
+For exact-input follow-up, `.github/workflows/fuzz-python-env-replay.yml`
+replays saved `validate_with_python` artifacts under all three policies on
+`ubuntu-latest`.
 
 ### Manual Runs
 

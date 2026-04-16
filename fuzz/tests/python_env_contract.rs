@@ -102,6 +102,10 @@ fn workflow_and_docs_stay_in_sync_with_supported_policies() {
         repo_root().join(".github/workflows/fuzz-python-env-comparison.yml"),
     )
     .expect("workflow should exist");
+    let replay_workflow = std::fs::read_to_string(
+        repo_root().join(".github/workflows/fuzz-python-env-replay.yml"),
+    )
+    .expect("replay workflow should exist");
     let readme = std::fs::read_to_string(repo_root().join("fuzz/README.md"))
         .expect("fuzz README should exist");
 
@@ -115,8 +119,24 @@ fn workflow_and_docs_stay_in_sync_with_supported_policies() {
             workflow.contains(name),
             "workflow must mention policy {name}"
         );
+        assert!(
+            replay_workflow.contains(name),
+            "replay workflow must mention policy {name}"
+        );
         assert!(readme.contains(name), "README must mention policy {name}");
     }
+
+    for artifact_name in ["fuzz-python-env-inherit", "fuzz-python-env-strip-setup-python"] {
+        assert!(
+            replay_workflow.contains(artifact_name),
+            "replay workflow must mention source artifact {artifact_name}"
+        );
+    }
+
+    assert!(
+        readme.contains(".github/workflows/fuzz-python-env-replay.yml"),
+        "README must mention the replay workflow"
+    );
 
     for path in [
         "fuzz/fuzz_targets/validate_with_python.rs",
@@ -133,9 +153,11 @@ fn workflow_and_docs_stay_in_sync_with_supported_policies() {
     let main_workflow =
         std::fs::read_to_string(repo_root().join(".github/workflows/fuzz.yml"))
             .expect("main fuzz workflow should exist");
-    let policy_count = main_workflow.matches("PICKLE_FUZZ_PYTHON_ENV_POLICY: strip_setup_python").count();
+    let policy_count = main_workflow
+        .matches("PICKLE_FUZZ_PYTHON_ENV_POLICY: strip_setup_python_and_ld_library_path")
+        .count();
     assert_eq!(
         policy_count, 2,
-        "main fuzz workflow should set strip_setup_python for both validate_with_python entry points"
+        "main fuzz workflow should set strip_setup_python_and_ld_library_path for both validate_with_python entry points"
     );
 }

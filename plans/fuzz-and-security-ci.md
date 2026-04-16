@@ -34,21 +34,25 @@ cargo audit
 cargo deny check advisories
 cd fuzz && cargo audit
 cargo +nightly-2026-04-16 test --manifest-path fuzz/Cargo.toml
-PICKLE_FUZZ_PYTHON_ENV_POLICY=strip_setup_python cargo +nightly-2026-04-16 run --manifest-path fuzz/Cargo.toml --example report_python_env --quiet
+PICKLE_FUZZ_PYTHON_ENV_POLICY=strip_setup_python_and_ld_library_path cargo +nightly-2026-04-16 run --manifest-path fuzz/Cargo.toml --example report_python_env --quiet
 ```
 
 GitHub evidence already observed on PR `#24`:
 
 - `Security Audit` green
 - `Fuzz Testing` green
-- `Fuzz Python Env Comparison` green for `inherit`,
-  `strip-setup-python`, and `strip-setup-python-and-ld-library-path`
+- Seeded `Fuzz Python Env Comparison` on April 16, 2026 showed:
+  `inherit` leaked, `strip-setup-python` crashed with a zero-byte artifact,
+  and `strip-setup-python-and-ld-library-path` finished clean
 
 ## Notes
 
 - The comparison workflow is diagnostic. It verifies the effective Python child
   environment used by the fuzz target, records policy/duration/seed metadata,
   and uploads both the env report and fuzz artifacts for each policy.
-- The current branch default remains `strip_setup_python` for scheduled and
-  custom `validate_with_python` runs because it is the least invasive CI-only
-  change under active observation.
+- The main GitHub-hosted `validate_with_python` workflow now uses
+  `strip_setup_python_and_ld_library_path`, while the fuzz target's unset local
+  default remains `strip_setup_python`.
+- `.github/workflows/fuzz-python-env-replay.yml` can replay the saved
+  `inherit` leak artifact and the `strip-setup-python` zero-byte artifact under
+  all three policies on `ubuntu-latest`.
