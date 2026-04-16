@@ -256,7 +256,8 @@ explicitly use `strip_setup_python_and_ld_library_path` on GitHub-hosted
 runners.
 For exact-input follow-up, `.github/workflows/fuzz-python-env-replay.yml`
 replays saved `validate_with_python` artifacts under all three policies on
-`ubuntu-latest`.
+`ubuntu-latest`; on PRs it targets the latest completed comparison run for the
+branch, and on `workflow_dispatch` it accepts an explicit comparison run id.
 
 ### Manual Runs
 

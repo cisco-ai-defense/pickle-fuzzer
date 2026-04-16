@@ -107,8 +107,9 @@ Not applicable.
   input.
 - The comparison workflow uploads both the fuzz artifacts and the
   `fuzz-python-env-report-*` artifact for each policy.
-- The replay workflow is manual (`workflow_dispatch`) and downloads artifacts
-  from a specified comparison run id using the repo's `GITHUB_TOKEN`.
+- The replay workflow runs on relevant PR updates and on `workflow_dispatch`;
+  it either resolves the latest completed comparison run on the branch or uses
+  an explicit run id, then downloads artifacts with the repo's `GITHUB_TOKEN`.
 - The tracked plan and PR summary for this branch live under `plans/`.
 
 ## Breaking Changes

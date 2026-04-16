@@ -1,11 +1,23 @@
 name: Fuzz Python Env Replay
 
 on:
+  pull_request:
+    branches: [ main ]
+    paths:
+      - .github/workflows/fuzz-python-env-replay.yml
+      - .github/workflows/fuzz-python-env-comparison.yml
+      - .github/workflows/fuzz.yml
+      - fuzz/fuzz_targets/validate_with_python.rs
+      - fuzz/src/lib.rs
+      - fuzz/src/python_env.rs
+      - fuzz/examples/report_python_env.rs
+      - fuzz/tests/python_env_contract.rs
+      - fuzz/README.md
   workflow_dispatch:
     inputs:
       source_run_id:
         description: Comparison workflow run id to replay artifacts from
-        required: true
+        required: false
 
 permissions:
   actions: read
@@ -76,19 +88,37 @@ jobs:
         id: input
         env:
           GH_TOKEN: ${{ github.token }}
-          SOURCE_RUN_ID: ${{ github.event.inputs.source_run_id }}
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_SOURCE_RUN_ID: ${{ github.event.inputs.source_run_id }}
+          SOURCE_BRANCH: ${{ github.event_name == 'pull_request' && github.head_ref || github.ref_name }}
           SOURCE_ARTIFACT_NAME: ${{ matrix.source_artifact_name }}
           INPUT_PREFIX: ${{ matrix.input_prefix }}
         run: |
-          case "$SOURCE_RUN_ID" in
+          source_run_id="$INPUT_SOURCE_RUN_ID"
+
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            source_run_id=$(gh run list \
+              --branch "$SOURCE_BRANCH" \
+              --workflow "Fuzz Python Env Comparison" \
+              --limit 20 \
+              --json databaseId,status \
+              --jq 'map(select(.status=="completed")) | .[0].databaseId // empty')
+          fi
+
+          if [ -z "$source_run_id" ]; then
+            echo "::error::Could not determine a completed Fuzz Python Env Comparison run id"
+            exit 1
+          fi
+
+          case "$source_run_id" in
             ''|*[!0-9]*)
-              echo "::error::workflow_dispatch input 'source_run_id' must be a GitHub Actions run id"
+              echo "::error::source_run_id must resolve to a GitHub Actions run id"
               exit 1
               ;;
           esac
 
           mkdir -p fuzz/replay-input fuzz/artifacts/python-env-replay
-          gh run download "$SOURCE_RUN_ID" -n "$SOURCE_ARTIFACT_NAME" -D fuzz/replay-input
+          gh run download "$source_run_id" -n "$SOURCE_ARTIFACT_NAME" -D fuzz/replay-input
 
           input_file=$(find fuzz/replay-input -maxdepth 1 -type f -name "${INPUT_PREFIX}*" | sort | head -n 1)
           if [ -z "$input_file" ]; then
@@ -97,8 +127,9 @@ jobs:
             exit 1
           fi
 
-          source_sha=$(gh api "repos/${{ github.repository }}/actions/runs/$SOURCE_RUN_ID" --jq .head_sha)
+          source_sha=$(gh api "repos/${{ github.repository }}/actions/runs/$source_run_id" --jq .head_sha)
 
+          printf 'source_run_id=%s\n' "$source_run_id" >> "$GITHUB_OUTPUT"
           printf 'input_file=%s\n' "$input_file" >> "$GITHUB_OUTPUT"
           printf 'input_name=%s\n' "$(basename "$input_file")" >> "$GITHUB_OUTPUT"
           printf 'input_size=%s\n' "$(wc -c < "$input_file" | tr -d ' ')" >> "$GITHUB_OUTPUT"
@@ -109,7 +140,7 @@ jobs:
           prefix="fuzz/artifacts/python-env-replay/${{ matrix.case_name }}-${{ matrix.policy_name }}"
           cp "${{ steps.input.outputs.input_file }}" "${prefix}-input.bin"
           {
-            echo "source_run_id=${{ github.event.inputs.source_run_id }}"
+            echo "source_run_id=${{ steps.input.outputs.source_run_id }}"
             echo "source_sha=${{ steps.input.outputs.source_sha }}"
             echo "source_artifact_name=${{ matrix.source_artifact_name }}"
             echo "input_name=${{ steps.input.outputs.input_name }}"
@@ -190,7 +221,7 @@ jobs:
             echo
             echo "- Case: \`${{ matrix.case_name }}\`"
             echo "- Policy: \`${{ matrix.env_policy }}\`"
-            echo "- Source run id: \`${{ github.event.inputs.source_run_id }}\`"
+            echo "- Source run id: \`${{ steps.input.outputs.source_run_id }}\`"
             echo "- Source input: \`${input_name}\` (${input_size} bytes)"
             echo "- Outcome: \`$outcome\`"
             echo "- cargo fuzz exit status: \`${CARGO_STATUS:-0}\`"
