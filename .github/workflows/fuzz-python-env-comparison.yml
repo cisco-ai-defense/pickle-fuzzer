@@ -48,7 +48,7 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@0f1b44df7e9cbb178d781a242338dfa5e243ad7f
         with:
-          toolchain: nightly
+          toolchain: nightly-2026-04-16
 
       - name: Install Python
         uses: actions/setup-python@v5
@@ -56,15 +56,15 @@ jobs:
           python-version: "3.11"
 
       - name: Install cargo-fuzz
-        run: cargo install cargo-fuzz
+        run: cargo install cargo-fuzz --locked --version 0.13.1
 
       - name: Cache fuzz corpus
         uses: actions/cache@v4
         with:
           path: fuzz/corpus/validate_with_python
-          key: fuzz-python-env-compare-${{ github.sha }}
+          key: fuzz-python-env-compare-${{ matrix.name }}-${{ github.sha }}
           restore-keys: |
-            fuzz-python-env-compare-
+            fuzz-python-env-compare-${{ matrix.name }}-
             fuzz-corpus-validate-python-
 
       - name: Determine fuzzing duration
@@ -85,13 +85,10 @@ jobs:
           fi
           printf 'duration=%s\n' "$duration" >> "$GITHUB_OUTPUT"
 
-      - name: Report Python environment
+      - name: Report effective Python environment
         env:
           PICKLE_FUZZ_PYTHON_ENV_POLICY: ${{ matrix.env_policy }}
-        run: |
-          echo "policy=$PICKLE_FUZZ_PYTHON_ENV_POLICY"
-          python3 --version
-          env | sort | grep -E '^(pythonLocation|PKG_CONFIG_PATH|Python_ROOT_DIR|Python2_ROOT_DIR|Python3_ROOT_DIR|LD_LIBRARY_PATH)=' || true
+        run: cargo run --manifest-path fuzz/Cargo.toml --example report_python_env --quiet
 
       - name: Run Python-validation fuzzing
         env:

@@ -440,14 +440,22 @@ impl Generator {
                 self.output.extend_from_slice(&bytes);
                 self.process_stack_ops(opcode, Some(&bytes));
             }
-            ShortBinString | ShortBinBytes if bytes.len() < 256 => {
-                // short_binstring and short_binbytes use 1-byte length
-                self.output.push(opcode.as_u8());
-                self.output.push(bytes.len() as u8);
-                self.output.extend_from_slice(&bytes);
-                self.process_stack_ops(opcode, Some(&bytes));
-            }
-            ShortBinString | ShortBinBytes => {}
+            ShortBinString | ShortBinBytes => match u8::try_from(bytes.len()) {
+                Ok(len) => {
+                    // short_binstring and short_binbytes use 1-byte length
+                    self.output.push(opcode.as_u8());
+                    self.output.push(len);
+                    self.output.extend_from_slice(&bytes);
+                    self.process_stack_ops(opcode, Some(&bytes));
+                }
+                Err(_) => {
+                    debug_assert!(
+                        false,
+                        "short bin opcodes require <=255 bytes, got {}",
+                        bytes.len()
+                    );
+                }
+            },
             BinBytes => {
                 // binbytes uses 4-byte unsigned int for length (protocol 3)
                 self.output.push(opcode.as_u8());

@@ -6,7 +6,7 @@ This directory contains fuzz targets for testing pickle-fuzzer's generation logi
 
 ```bash
 # Install cargo-fuzz (one-time setup)
-cargo install cargo-fuzz
+cargo install cargo-fuzz --locked --version 0.13.1
 
 # List all fuzz targets
 cargo fuzz list
@@ -54,6 +54,26 @@ cargo fuzz run validate_with_python -- -max_total_time=1800
 - Python compatibility via strict whole-file `pickletools` validation
 
 **Note**: This target spawns Python subprocesses to validate each generated pickle using the same validation logic as `scripts/validate-pickles.py`.
+
+### Python validator environment policy
+
+`validate_with_python` supports `PICKLE_FUZZ_PYTHON_ENV_POLICY` to control which
+GitHub runner variables are inherited by the spawned `python3` process:
+
+- `inherit`: keep the runner environment unchanged
+- `strip_setup_python`: remove the `actions/setup-python` discovery variables
+  (`pythonLocation`, `Python*_ROOT_DIR`, and `PKG_CONFIG_PATH`)
+- `strip_setup_python_and_ld_library_path`: remove the setup-python discovery
+  variables plus `LD_LIBRARY_PATH`
+
+If the variable is unset, the target defaults to `strip_setup_python`.
+
+To inspect the effective child-process environment that the fuzz target will use:
+
+```bash
+PICKLE_FUZZ_PYTHON_ENV_POLICY=strip_setup_python \
+cargo run --manifest-path fuzz/Cargo.toml --example report_python_env --quiet
+```
 
 ## Recommended Workflow
 
@@ -227,6 +247,10 @@ The project includes automated fuzzing via GitHub Actions (`.github/workflows/fu
 - **Pull Requests & Pushes**: 5-minute fast fuzzing with `all_protocols`
 - **Daily (2 AM UTC)**: 30-minute thorough fuzzing with `validate_with_python`
 - **Daily**: Corpus minimization to remove redundant test cases
+
+The repo also includes `.github/workflows/fuzz-python-env-comparison.yml`, a
+PR/workflow-dispatch matrix that compares the effective Python child-process
+environment for the three policy variants on `ubuntu-latest`.
 
 ### Manual Runs
 

@@ -61,14 +61,13 @@
 #![no_main]
 
 use libfuzzer_sys::fuzz_target;
+use pickle_fuzzer_fuzz::python_env::{spawn_python_command, PythonEnvPolicy};
 use pickle_fuzzer::mutators::{
     BitFlipMutator, BoundaryMutator, CharacterMutator, OffByOneMutator, StringLengthMutator,
 };
 use pickle_fuzzer::{Generator, Version};
-use std::env;
 use std::io::Write;
-use std::process::{Command, Stdio};
-use std::sync::OnceLock;
+use std::process::Stdio;
 
 const STRICT_PICKLETOOLS_VALIDATOR: &str = r#"import io
 import pickletools
@@ -85,63 +84,9 @@ if stop_pos + 1 != len(data):
 pickletools.dis(data, out=io.StringIO())
 "#;
 
-const SETUP_PYTHON_ENV_REMOVALS: &[&str] = &[
-    "pythonLocation",
-    "Python_ROOT_DIR",
-    "Python2_ROOT_DIR",
-    "Python3_ROOT_DIR",
-    "PKG_CONFIG_PATH",
-];
-
-static PYTHON_ENV_POLICY: OnceLock<PythonEnvPolicy> = OnceLock::new();
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum PythonEnvPolicy {
-    Inherit,
-    StripSetupPython,
-    StripSetupPythonAndLdLibraryPath,
-}
-
-impl PythonEnvPolicy {
-    fn current() -> Self {
-        *PYTHON_ENV_POLICY.get_or_init(|| match env::var("PICKLE_FUZZ_PYTHON_ENV_POLICY") {
-            Ok(value) => match value.as_str() {
-                "inherit" => Self::Inherit,
-                "strip_setup_python" => Self::StripSetupPython,
-                "strip_setup_python_and_ld_library_path" => {
-                    Self::StripSetupPythonAndLdLibraryPath
-                }
-                _ => panic!(
-                    "invalid PICKLE_FUZZ_PYTHON_ENV_POLICY: {value}; expected one of \
-                     inherit, strip_setup_python, strip_setup_python_and_ld_library_path"
-                ),
-            },
-            Err(_) => Self::StripSetupPython,
-        })
-    }
-
-    fn apply(self, command: &mut Command) {
-        match self {
-            Self::Inherit => {}
-            Self::StripSetupPython | Self::StripSetupPythonAndLdLibraryPath => {
-                for key in SETUP_PYTHON_ENV_REMOVALS {
-                    command.env_remove(key);
-                }
-            }
-        }
-
-        if self == Self::StripSetupPythonAndLdLibraryPath {
-            command.env_remove("LD_LIBRARY_PATH");
-        }
-    }
-}
-
 /// validate pickle using Python's pickletools plus a whole-file STOP check
 fn validate_with_python(pickle_bytes: &[u8]) -> bool {
-    let mut command = Command::new("python3");
-    PythonEnvPolicy::current().apply(&mut command);
-
-    let mut child = match command
+    let mut child = match spawn_python_command(PythonEnvPolicy::from_env_var())
         .arg("-c")
         .arg(STRICT_PICKLETOOLS_VALIDATOR)
         .stdin(Stdio::piped())
