@@ -27,6 +27,7 @@ permissions:
 env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
+  FUZZ_SEED: "424242"
 
 jobs:
   compare-python-env:
@@ -88,6 +89,16 @@ jobs:
           fi
           printf 'duration=%s\n' "$duration" >> "$GITHUB_OUTPUT"
 
+      - name: Record comparison metadata
+        run: |
+          mkdir -p fuzz/artifacts/python-env-reports
+          {
+            echo "policy=${{ matrix.env_policy }}"
+            echo "duration=${{ steps.duration.outputs.duration }}"
+            echo "seed=$FUZZ_SEED"
+            echo "sha=${{ github.sha }}"
+          } > "fuzz/artifacts/python-env-reports/${{ matrix.name }}-metadata.txt"
+
       - name: Report effective Python environment
         env:
           PICKLE_FUZZ_PYTHON_ENV_POLICY: ${{ matrix.env_policy }}
@@ -101,10 +112,12 @@ jobs:
           FUZZ_DURATION: ${{ steps.duration.outputs.duration }}
           PICKLE_FUZZ_PYTHON_ENV_POLICY: ${{ matrix.env_policy }}
         run: |
+          set -o pipefail
           cargo fuzz run validate_with_python -- \
+            -seed="$FUZZ_SEED" \
             -max_total_time="$FUZZ_DURATION" \
             -print_final_stats=1 \
-            -verbosity=1
+            -verbosity=1 | tee "fuzz/artifacts/python-env-reports/${{ matrix.name }}-fuzz.log"
         continue-on-error: true
 
       - name: Check for crashes
@@ -140,5 +153,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: fuzz-python-env-report-${{ matrix.name }}
-          path: fuzz/artifacts/python-env-reports/${{ matrix.name }}.txt
+          path: |
+            fuzz/artifacts/python-env-reports/${{ matrix.name }}.txt
+            fuzz/artifacts/python-env-reports/${{ matrix.name }}-metadata.txt
+            fuzz/artifacts/python-env-reports/${{ matrix.name }}-fuzz.log
           if-no-files-found: error

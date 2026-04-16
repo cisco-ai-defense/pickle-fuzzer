@@ -84,6 +84,21 @@ jobs:
       - name: Run clippy
         run: cargo clippy --all-targets --all-features -- -D warnings
 
+  fuzz-contracts:
+    name: Fuzz Contracts
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@0f1b44df7e9cbb178d781a242338dfa5e243ad7f
+        with:
+          toolchain: nightly-2026-04-16
+
+      - name: Run fuzz helper tests
+        run: cargo test --manifest-path fuzz/Cargo.toml
+
   coverage:
     name: Code Coverage
     runs-on: ubuntu-latest
@@ -97,7 +112,7 @@ jobs:
           toolchain: nightly
 
       - name: Install tarpaulin
-        run: cargo install cargo-tarpaulin
+        run: cargo install cargo-tarpaulin --locked --version 0.34.1
 
       - name: Generate coverage
         run: cargo tarpaulin

@@ -129,4 +129,13 @@ fn workflow_and_docs_stay_in_sync_with_supported_policies() {
             "workflow path filters must include {path}"
         );
     }
+
+    let main_workflow =
+        std::fs::read_to_string(repo_root().join(".github/workflows/fuzz.yml"))
+            .expect("main fuzz workflow should exist");
+    let policy_count = main_workflow.matches("PICKLE_FUZZ_PYTHON_ENV_POLICY: strip_setup_python").count();
+    assert_eq!(
+        policy_count, 2,
+        "main fuzz workflow should set strip_setup_python for both validate_with_python entry points"
+    );
 }

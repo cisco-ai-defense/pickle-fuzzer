@@ -16,6 +16,8 @@ on the branch.
   policy variants on `ubuntu-latest`.
 - The main fuzz workflow uses the targeted policy without broad leak
   suppression.
+- The fuzz helper contract tests run in regular PR CI.
+- Security CI covers both `Cargo.lock` and `fuzz/Cargo.lock`.
 - `cargo clippy --all-targets --all-features -- -D warnings` passes on the
   stable toolchain used by GitHub CI.
 
@@ -45,8 +47,8 @@ GitHub evidence already observed on PR `#24`:
 ## Notes
 
 - The comparison workflow is diagnostic. It verifies the effective Python child
-  environment used by the fuzz target and uploads both the env report and fuzz
-  artifacts for each policy.
+  environment used by the fuzz target, records policy/duration/seed metadata,
+  and uploads both the env report and fuzz artifacts for each policy.
 - The current branch default remains `strip_setup_python` for scheduled and
   custom `validate_with_python` runs because it is the least invasive CI-only
   change under active observation.

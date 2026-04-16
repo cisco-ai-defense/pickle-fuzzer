@@ -19,6 +19,19 @@ use std::ffi::OsString;
 use std::process::Command;
 
 pub const PYTHON_ENV_POLICY_VAR: &str = "PICKLE_FUZZ_PYTHON_ENV_POLICY";
+pub const REPORTED_PYTHON_ENV_KEYS: &[&str] = &[
+    "pythonLocation",
+    "Python_ROOT_DIR",
+    "Python2_ROOT_DIR",
+    "Python3_ROOT_DIR",
+    "PKG_CONFIG_PATH",
+    "LD_LIBRARY_PATH",
+    "PATH",
+    "PYTHONHOME",
+    "PYTHONPATH",
+    "VIRTUAL_ENV",
+    "CONDA_PREFIX",
+];
 
 const STRIP_SETUP_PYTHON_REMOVALS: &[&str] = &[
     "pythonLocation",
@@ -148,6 +161,7 @@ mod tests {
         );
     }
 
+    #[cfg(unix)]
     #[test]
     fn resolve_non_utf8_values_fall_back_to_safe_default() {
         use std::os::unix::ffi::OsStringExt;

@@ -14,13 +14,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use pickle_fuzzer_fuzz::python_env::{spawn_python_command, PythonEnvPolicy};
+use pickle_fuzzer_fuzz::python_env::{
+    spawn_python_command, PythonEnvPolicy, REPORTED_PYTHON_ENV_KEYS,
+};
 use std::process::ExitCode;
 
 fn main() -> ExitCode {
     let policy = PythonEnvPolicy::from_env_var();
-    let script =
-        "import os\nfor key, value in sorted(os.environ.items()):\n    print(f\"{key}={value}\")\n";
+    let keys = REPORTED_PYTHON_ENV_KEYS
+        .iter()
+        .map(|key| format!("{key:?}"))
+        .collect::<Vec<_>>()
+        .join(", ");
+
+    let script = format!(
+        "import os\nfor key in [{keys}]:\n    value = os.environ.get(key)\n    print(f\"{{key}}={{value if value is not None else '<unset>'}}\")\n"
+    );
 
     let output = match spawn_python_command(policy).arg("-c").arg(script).output() {
         Ok(output) => output,
