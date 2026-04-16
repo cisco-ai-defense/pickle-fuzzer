@@ -52,9 +52,6 @@ jobs:
             fuzz-corpus-all-protocols-
 
       - name: Run fast fuzzing (5 minutes)
-        env:
-          # Keep leak reports in the fuzz log without turning them into fatal crash artifacts.
-          LSAN_OPTIONS: exitcode=0
         run: |
           cargo fuzz run all_protocols -- \
             -max_total_time=300 \
@@ -105,10 +102,8 @@ jobs:
         with:
           toolchain: nightly
 
-      - name: Install Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
+      - name: Verify system Python
+        run: python3 --version
 
       - name: Install cargo-fuzz
         run: cargo install cargo-fuzz
@@ -142,8 +137,6 @@ jobs:
       - name: Run thorough fuzzing with Python validation
         env:
           FUZZ_DURATION: ${{ steps.duration.outputs.duration }}
-          # Keep leak reports in the fuzz log without turning them into fatal crash artifacts.
-          LSAN_OPTIONS: exitcode=0
         run: |
           cargo fuzz run validate_with_python -- \
             -max_total_time="$FUZZ_DURATION" \
@@ -194,10 +187,8 @@ jobs:
         with:
           toolchain: nightly
 
-      - name: Install Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
+      - name: Verify system Python
+        run: python3 --version
 
       - name: Install cargo-fuzz
         run: cargo install cargo-fuzz
@@ -242,8 +233,6 @@ jobs:
         env:
           FUZZ_TARGET: ${{ steps.target.outputs.target }}
           FUZZ_DURATION: ${{ steps.duration.outputs.duration }}
-          # Keep leak reports in the fuzz log without turning them into fatal crash artifacts.
-          LSAN_OPTIONS: exitcode=0
         run: |
           cargo fuzz run "$FUZZ_TARGET" -- \
             -max_total_time="$FUZZ_DURATION" \
