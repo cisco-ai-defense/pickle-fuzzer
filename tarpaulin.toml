@@ -26,8 +26,15 @@ exclude-files = [
     "benches/*",
 ]
 
-# Run tests with all features
-all-features = true
+# Coverage measures the Rust library and CLI under the default feature
+# set. The optional `python-bindings` feature is deliberately excluded:
+# src/python.rs is a thin PyO3 FFI shim that cannot be exercised from
+# Rust tests (it needs a live interpreter, so it always scored 0/36), and
+# building it links libpython into the coverage test binary, which fails
+# to link under the nightly toolchain's rust-lld (undefined symbol
+# _PyEval_RequestCodeExtraIndex). The Python surface is covered by the
+# maturin-built pytest suite instead.
+all-features = false
 
 # Timeout duration for tests to finish
 test-timeout = "2m"
