@@ -222,22 +222,26 @@ impl StackObjectRef {
             nodes.insert(ptr, node);
         }
 
-        let isolated = nodes.iter().all(|(ptr, node)| {
-            let observed_strong = Rc::strong_count(&node.0).saturating_sub(1);
-            let internal_refs = internal_incoming.get(ptr).copied().unwrap_or_default();
-            if *ptr == root_ptr {
-                observed_strong == internal_refs + 1
-            } else {
-                observed_strong == internal_refs
+        // Preserve nodes reachable from owners outside this subgraph. The root's
+        // reference being dropped and each traversal reference do not count.
+        let mut live = HashSet::new();
+        let mut pending: Vec<_> = nodes
+            .iter()
+            .filter_map(|(ptr, node)| {
+                let internal_refs = internal_incoming.get(ptr).copied().unwrap_or_default();
+                let transient_refs = 1 + usize::from(*ptr == root_ptr);
+                (Rc::strong_count(&node.0) > internal_refs + transient_refs).then_some(*ptr)
+            })
+            .collect();
+        while let Some(ptr) = pending.pop() {
+            if live.insert(ptr) {
+                pending.extend(nodes[&ptr].child_refs().iter().map(Self::ptr_addr));
             }
-        });
-
-        if !isolated {
-            return;
         }
-
-        for node in nodes.values() {
-            node.clear_child_refs();
+        for (ptr, node) in &nodes {
+            if !live.contains(ptr) {
+                node.clear_child_refs();
+            }
         }
         drop(nodes);
     }
@@ -373,6 +377,55 @@ mod tests {
 
         drop(list);
 
+        assert!(weak.upgrade().is_none());
+    }
+
+    #[test]
+    fn cycle_with_externally_shared_leaf_is_released() {
+        let list = StackObjectRef::new(StackObject::List(Vec::new()));
+        let leaf = StackObjectRef::new(StackObject::Int(7));
+        let weak = Rc::downgrade(&list.0);
+        if let StackObject::List(items) = &mut *list.borrow_mut() {
+            items.push(list.clone());
+            items.push(leaf.clone());
+        }
+        drop(list);
+        drop(leaf);
+        assert!(
+            weak.upgrade().is_none(),
+            "self-cycle leaked when a child was externally shared"
+        );
+    }
+
+    #[test]
+    fn externally_owned_child_is_unchanged() {
+        let list = StackObjectRef::new(StackObject::List(Vec::new()));
+        let child = StackObjectRef::new(StackObject::List(vec![StackObjectRef::new(
+            StackObject::Int(7),
+        )]));
+        let weak = Rc::downgrade(&list.0);
+        if let StackObject::List(items) = &mut *list.borrow_mut() {
+            items.push(list.clone());
+            items.push(child.clone());
+        }
+        drop(list);
+        assert!(weak.upgrade().is_none());
+        assert!(matches!(&*child.borrow(), StackObject::List(items) if items.len() == 1));
+    }
+
+    #[test]
+    fn cycle_with_external_back_reference_is_preserved() {
+        let list = StackObjectRef::new(StackObject::List(Vec::new()));
+        let child = StackObjectRef::new(StackObject::List(vec![list.clone()]));
+        let weak = Rc::downgrade(&list.0);
+        if let StackObject::List(items) = &mut *list.borrow_mut() {
+            items.push(list.clone());
+            items.push(child.clone());
+        }
+        drop(list);
+        assert!(weak.upgrade().is_some());
+        assert!(matches!(&*child.borrow(), StackObject::List(items) if items.len() == 1));
+        drop(child);
         assert!(weak.upgrade().is_none());
     }
 }
